@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IoT Door Monitoring Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes pulse-slow {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .animate-pulse-slow {
+      animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+  
+  <!-- Notification Toast -->
+  <div id="notification" class="hidden fixed top-4 right-4 z-50 animate-pulse-slow">
+    <div class="bg-red-500 text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3">
+      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+      </svg>
+      <div>
+        <p class="font-bold">Pintu Terbuka!</p>
+        <p class="text-sm">Aktivitas terdeteksi</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="p-4 md:p-8">
+    <!-- Header -->
+    <div class="max-w-7xl mx-auto mb-8 text-center">
+      <h1 class="text-4xl md:text-5xl font-bold text-white mb-2 tracking-tight">
+        IoT Door Monitor
+      </h1>
+      <p class="text-purple-200 text-lg">Real-time Smart Door Monitoring System</p>
+    </div>
+
+    <div class="max-w-7xl mx-auto grid md:grid-cols-2 gap-6">
+      <!-- Status Card -->
+      <div class="bg-white/10 backdrop-blur-xl rounded-3xl p-8 border border-white/20 shadow-2xl">
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+            </svg>
+            Status Pintu
+          </h2>
+        </div>
+
+        <div class="flex flex-col items-center justify-center py-8">
+          <div id="statusIcon" class="relative mb-6 transition-all duration-500">
+            <div id="statusGlow" class="absolute inset-0 rounded-full blur-2xl bg-green-500 opacity-50"></div>
+            <div id="statusCircle" class="relative w-32 h-32 rounded-full flex items-center justify-center bg-gradient-to-br from-green-500 to-emerald-500 shadow-xl">
+              <svg id="lockIcon" class="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+              </svg>
+            </div>
+          </div>
+
+          <div class="text-center">
+            <p id="statusText" class="text-5xl font-bold mb-2 text-green-400">CLOSED</p>
+            <div class="flex items-center justify-center gap-2 text-purple-200">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <p id="lastUpdate" class="text-sm">Terakhir update: -</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-6 grid grid-cols-2 gap-4">
+          <div class="bg-white/5 rounded-xl p-4 border border-white/10">
+            <p class="text-purple-300 text-sm mb-1">Total Logs</p>
+            <p id="totalLogs" class="text-white text-2xl font-bold">0</p>
+          </div>
+          <div class="bg-white/5 rounded-xl p-4 border border-white/10">
+            <p class="text-purple-300 text-sm mb-1">Notifikasi</p>
+            <p id="notifStatus" class="text-white text-2xl font-bold">OFF</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- History Card -->
+      <div class="bg-white/10 backdrop-blur-xl rounded-3xl p-8 border border-white/20 shadow-2xl">
+        <h2 class="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+          <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          Riwayat Aktivitas
+        </h2>
+
+        <div id="historyContainer" class="space-y-3 min-h-[400px]">
+          <div class="text-center py-12">
+            <svg class="w-16 h-16 text-purple-400 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+            </svg>
+            <p class="text-purple-300">Belum ada riwayat aktivitas</p>
+          </div>
+        </div>
+
+        <!-- Pagination -->
+        <div id="pagination" class="hidden mt-6 flex items-center justify-center gap-2"></div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="max-w-7xl mx-auto mt-8 text-center">
+      <p class="text-purple-300 text-sm">
+        Powered by ESP32 + Firebase • Real-time Monitoring System
+      </p>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+  <script>
+    // Firebase Configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyA1kCaXAKhzdv28TwxCyi_Sre5SzQmYyKQ",
+      authDomain: "sbdp10-6b194.firebaseapp.com",
+      databaseURL: "https://sbdp10-6b194-default-rtdb.firebaseio.com",
+      projectId: "sbdp10-6b194",
+      storageBucket: "sbdp10-6b194.firebasestorage.app",
+      messagingSenderId: "855068226828",
+      appId: "1:855068226828:web:072650849ed568ea144529"
+    };
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // State Management
+    let doorLogs = [];
+    let currentPage = 1;
+    const itemsPerPage = 5;
+    let previousState = 'CLOSED';
+    let isNotificationEnabled = false;
+
+    // Request Notification Permission
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().then(permission => {
+        isNotificationEnabled = permission === 'granted';
+        document.getElementById('notifStatus').textContent = isNotificationEnabled ? 'ON' : 'OFF';
+      });
+    } else if (Notification.permission === 'granted') {
+      isNotificationEnabled = true;
+      document.getElementById('notifStatus').textContent = 'ON';
+    }
+
+    // Format Date
+    function formatDate(timestamp) {
+      return new Date(timestamp).toLocaleString('id-ID', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    // Update Status UI
+    function updateStatusUI(state, updatedAt) {
+      const statusText = document.getElementById('statusText');
+      const statusCircle = document.getElementById('statusCircle');
+      const statusGlow = document.getElementById('statusGlow');
+      const statusIcon = document.getElementById('statusIcon');
+      const lockIcon = document.getElementById('lockIcon');
+      const lastUpdate = document.getElementById('lastUpdate');
+
+      statusText.textContent = state;
+      lastUpdate.textContent = 'Terakhir update: ' + formatDate(updatedAt);
+
+      if (state === 'OPEN') {
+        statusText.className = 'text-5xl font-bold mb-2 text-red-400';
+        statusCircle.className = 'relative w-32 h-32 rounded-full flex items-center justify-center bg-gradient-to-br from-red-500 to-orange-500 shadow-xl';
+        statusGlow.className = 'absolute inset-0 rounded-full blur-2xl bg-red-500 opacity-50';
+        statusIcon.classList.add('animate-pulse-slow');
+        
+        // Unlock icon
+        lockIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z"></path>';
+      } else {
+        statusText.className = 'text-5xl font-bold mb-2 text-green-400';
+        statusCircle.className = 'relative w-32 h-32 rounded-full flex items-center justify-center bg-gradient-to-br from-green-500 to-emerald-500 shadow-xl';
+        statusGlow.className = 'absolute inset-0 rounded-full blur-2xl bg-green-500 opacity-50';
+        statusIcon.classList.remove('animate-pulse-slow');
+        
+        // Lock icon
+        lockIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>';
+      }
+    }
+
+    // Show Notification
+    function showNotification() {
+      const notif = document.getElementById('notification');
+      notif.classList.remove('hidden');
+      setTimeout(() => notif.classList.add('hidden'), 5000);
+
+      if (isNotificationEnabled) {
+        new Notification('⚠️ Pintu Terbuka!', {
+          body: 'Pintu IoT telah dibuka. Periksa status sekarang.',
+          icon: '🚪'
+        });
+      }
+    }
+
+    // Render History
+    function renderHistory() {
+      const container = document.getElementById('historyContainer');
+      const pagination = document.getElementById('pagination');
+      
+      if (doorLogs.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-12">
+            <svg class="w-16 h-16 text-purple-400 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+            </svg>
+            <p class="text-purple-300">Belum ada riwayat aktivitas</p>
+          </div>
+        `;
+        pagination.classList.add('hidden');
+        return;
+      }
+
+      const totalPages = Math.ceil(doorLogs.length / itemsPerPage);
+      const startIndex = (currentPage - 1) * itemsPerPage;
+      const paginatedLogs = doorLogs.slice(startIndex, startIndex + itemsPerPage);
+
+      container.innerHTML = paginatedLogs.map(log => {
+        const isOpen = log.status === 'OPEN';
+        const iconPath = isOpen 
+          ? 'M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z'
+          : 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z';
+        
+        return `
+          <div class="bg-white/5 rounded-xl p-4 border border-white/10 hover:bg-white/10 transition-all duration-300">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full flex items-center justify-center ${isOpen ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${iconPath}"></path>
+                  </svg>
+                </div>
+                <div>
+                  <p class="text-white font-semibold">${log.status}</p>
+                  <p class="text-purple-300 text-xs">Jarak: ${log.distance} cm</p>
+                </div>
+              </div>
+              <p class="text-purple-200 text-sm">${formatDate(log.timestamp)}</p>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Render Pagination
+      if (totalPages > 1) {
+        pagination.classList.remove('hidden');
+        pagination.innerHTML = `
+          <button onclick="changePage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''} 
+            class="p-2 rounded-lg bg-white/5 border border-white/10 text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+            </svg>
+          </button>
+          ${Array.from({length: totalPages}, (_, i) => `
+            <button onclick="changePage(${i + 1})" 
+              class="w-10 h-10 rounded-lg font-semibold transition-all ${currentPage === i + 1 
+                ? 'bg-purple-500 text-white' 
+                : 'bg-white/5 border border-white/10 text-purple-200 hover:bg-white/10'}">
+              ${i + 1}
+            </button>
+          `).join('')}
+          <button onclick="changePage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''} 
+            class="p-2 rounded-lg bg-white/5 border border-white/10 text-white hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+            </svg>
+          </button>
+        `;
+      } else {
+        pagination.classList.add('hidden');
+      }
+    }
+
+    // Change Page
+    function changePage(page) {
+      const totalPages = Math.ceil(doorLogs.length / itemsPerPage);
+      if (page >= 1 && page <= totalPages) {
+        currentPage = page;
+        renderHistory();
+      }
+    }
+
+    // Listen to Door Status
+    db.ref('doorStatus').on('value', (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        updateStatusUI(data.state, data.updatedAt);
+        
+        // Show notification on door open
+        if (data.state === 'OPEN' && previousState === 'CLOSED') {
+          showNotification();
+        }
+        previousState = data.state;
+      }
+    });
+
+    // Listen to Door Logs
+    db.ref('doorLogs').on('value', (snapshot) => {
+    doorLogs = [];
+
+    snapshot.forEach(child => {
+        const value = child.val();
+
+        doorLogs.push({
+        status: value.status,
+        distance: value.distance ?? value.distance_cm ?? '-',
+        timestamp: value.timestamp
+            ? Number(value.timestamp)
+            : Number(child.key)
+        });
+    });
+
+    doorLogs.sort((a, b) => b.timestamp - a.timestamp);
+
+    document.getElementById('totalLogs').textContent = doorLogs.length;
+    renderHistory();
+    });
+
+  </script>
+</body>
+</html>
