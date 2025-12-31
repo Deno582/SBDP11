@@ -155,6 +155,7 @@
     const itemsPerPage = 5;
     let notificationEnabled = false;
     let audioContext = null; // Global AudioContext untuk reuse
+    let pendingBellSound = false; // Flag untuk bell sound yang pending user interaction
     
     // Register Service Worker
     if ('serviceWorker' in navigator) {
@@ -236,15 +237,6 @@
         } catch (e) {
           console.log('AudioContext initialization deferred:', e);
         }
-      }
-
-      // Resume AudioContext on user interaction if suspended
-      if (audioContext && audioContext.state === 'suspended') {
-        audioContext.resume().then(() => {
-          console.log('✅ AudioContext resumed on dashboard load');
-        }).catch(e => {
-          console.log('AudioContext resume failed:', e);
-        });
       }
 
       // Add user interaction listener to resume AudioContext if needed
@@ -330,9 +322,7 @@
 
       if (state === 'OPEN') {
         statusText.className = 'text-5xl font-bold text-red-400 mb-2';
-        console.log('Status changed to OPEN, triggering notification and sound');
-        // Trigger notification and sound for OPEN status
-        sendActivityNotification('OPEN', 'N/A'); // Use 'N/A' for distance if not available
+        console.log('Status changed to OPEN - UI updated');
       } else {
         statusText.className = 'text-5xl font-bold text-green-400 mb-2';
       }
@@ -347,33 +337,50 @@
     function playRingBellSound() {
       console.log('🔔 === BELL SOUND TRIGGERED ===');
       console.log('Current audioContext:', audioContext);
-      
+
       let ctx = audioContext;
       if (!ctx) {
         console.log('No global audioContext, creating new one');
         try {
           ctx = new (window.AudioContext || window.webkitAudioContext)();
+          audioContext = ctx; // Update global reference
           console.log('New AudioContext created');
         } catch (err) {
           console.error('AudioContext creation failed:', err);
           return;
         }
       }
-      
+
       console.log('AudioContext state:', ctx.state);
       console.log('AudioContext currentTime:', ctx.currentTime);
-      
+
       if (ctx.state === 'suspended') {
-        console.log('AudioContext suspended, attempting to resume...');
+        console.log('AudioContext suspended, setting pending bell sound');
+        pendingBellSound = true;
+        // Try to resume immediately
         ctx.resume().then(() => {
           console.log('AudioContext resumed successfully');
-          createBellSound(ctx);
+          if (pendingBellSound) {
+            pendingBellSound = false;
+            createBellSound(ctx);
+          }
         }).catch(e => {
           console.error('Resume failed:', e);
+          // Set up listener for next user interaction
+          const playPendingSound = () => {
+            if (pendingBellSound && ctx.state === 'running') {
+              pendingBellSound = false;
+              createBellSound(ctx);
+              document.removeEventListener('click', playPendingSound);
+              document.removeEventListener('touchstart', playPendingSound);
+            }
+          };
+          document.addEventListener('click', playPendingSound);
+          document.addEventListener('touchstart', playPendingSound);
         });
         return;
       }
-      
+
       console.log('AudioContext is running, creating bell sound');
       createBellSound(ctx);
     }
@@ -530,65 +537,22 @@
         const icon = status === 'OPEN' ? '🚨' : '✅';
         const title = icon + ' ' + (status === 'OPEN' ? 'PINTU TERBUKA' : 'PINTU TERTUTUP');
         const body = `Status: ${status} | Jarak: ${distance} cm`;
-        
+
         console.log('📢 NOTIFICATION EVENT:', {status, distance, notificationEnabled, permission: Notification?.permission});
-        
-        // Tampilkan custom notification di website SELALU
-        showCustomNotification(title, body);
-        
-        // Play bell sound HANYA jika OPEN
-        if (status === 'OPEN') {
-          console.log('🔔 PLAYING BELL SOUND');
-          playRingBellSound();
-        }
-        
-        // ========== DESKTOP NOTIFICATION ==========
-        try {
-          if ('Notification' in window && Notification.permission === 'granted') {
-            console.log('📬 Attempting Desktop Notification...');
-            
-            const notifObj = new Notification(title, {
-              body: body,
-              tag: status === 'OPEN' ? 'door-open-notification' : 'door-closed-notification',
-              requireInteraction: status === 'OPEN',
-              actions: status === 'OPEN' ? [
-                { action: 'open_door', title: 'Buka 🔓' },
-                { action: 'close_door', title: 'Tutup 🔒' }
-              ] : []
-            });
-            
-            notifObj.onclick = () => {
-              console.log('Notification clicked');
-              window.focus();
-              notifObj.close();
-            };
-            
-            notifObj.onaction = (e) => {
-              console.log('Action clicked:', e.action);
-              window.focus();
-              notifObj.close();
-            };
-            
-            // Auto-close untuk CLOSED after 5s
-            if (status !== 'OPEN') {
-              setTimeout(() => {
-                notifObj.close();
-              }, 5000);
-            }
-            
-            console.log('✅ Desktop Notification sent');
-          } else {
-            console.warn('Desktop: Permission not granted or API unavailable');
-          }
-        } catch (err) {
-          console.error('Desktop notification error:', err);
-        }
-        
-        // ========== ANDROID NOTIFICATION ==========
+
+        // ========== PLATFORM DETECTION ==========
         const isAndroid = /Android|webOS/i.test(navigator.userAgent);
-        if (isAndroid && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const isMobile = isAndroid || isIOS;
+        const useServiceWorker = isMobile && 'serviceWorker' in navigator && navigator.serviceWorker.controller;
+
+        console.log('Platform detection:', {isAndroid, isIOS, isMobile, useServiceWorker, swController: !!navigator.serviceWorker?.controller});
+
+        // ========== SHOW NOTIFICATION BASED ON PLATFORM ==========
+        if (useServiceWorker) {
+          // Mobile with service worker - use service worker notification
           try {
-            console.log('📱 Attempting Android Notification via Service Worker...');
+            console.log('📱 Using Service Worker Notification for mobile...');
             navigator.serviceWorker.controller.postMessage({
               type: 'SHOW_NOTIFICATION',
               title: title,
@@ -599,12 +563,70 @@
                 vibrate: [200, 100, 200, 100, 200]
               }
             });
-            console.log('✅ Android notification sent');
+            console.log('✅ Mobile notification sent via service worker');
           } catch (err) {
-            console.error('Android notification error:', err);
+            console.error('Mobile notification error:', err);
+            // Fallback to custom notification
+            showCustomNotification(title, body);
+          }
+        } else if (isMobile) {
+          // Mobile without service worker - use custom notification
+          console.log('📱 Using Custom Notification for mobile (no service worker)...');
+          showCustomNotification(title, body);
+        } else {
+          // Desktop - use native notification API
+          try {
+            if ('Notification' in window && Notification.permission === 'granted') {
+              console.log('💻 Attempting Desktop Notification...');
+
+              const notifObj = new Notification(title, {
+                body: body,
+                tag: status === 'OPEN' ? 'door-open-notification' : 'door-closed-notification',
+                requireInteraction: status === 'OPEN',
+                actions: status === 'OPEN' ? [
+                  { action: 'open_door', title: 'Buka 🔓' },
+                  { action: 'close_door', title: 'Tutup 🔒' }
+                ] : []
+              });
+
+              notifObj.onclick = () => {
+                console.log('Desktop notification clicked');
+                window.focus();
+                notifObj.close();
+              };
+
+              notifObj.onaction = (e) => {
+                console.log('Desktop action clicked:', e.action);
+                window.focus();
+                notifObj.close();
+              };
+
+              // Auto-close untuk CLOSED after 5s
+              if (status !== 'OPEN') {
+                setTimeout(() => {
+                  notifObj.close();
+                }, 5000);
+              }
+
+              console.log('✅ Desktop Notification sent successfully');
+            } else {
+              console.warn('Desktop: Notification API not available or permission not granted');
+              // Fallback to custom notification for desktop
+              showCustomNotification(title, body);
+            }
+          } catch (err) {
+            console.error('Desktop notification error:', err);
+            // Fallback to custom notification
+            showCustomNotification(title, body);
           }
         }
-        
+
+        // ========== PLAY BELL SOUND FOR OPEN STATUS ==========
+        if (status === 'OPEN') {
+          console.log('🔔 PLAYING BELL SOUND FOR OPEN STATUS');
+          playRingBellSound();
+        }
+
       } else {
         console.log('⚠️ Notifications disabled');
       }
