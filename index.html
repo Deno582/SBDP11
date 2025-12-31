@@ -56,9 +56,9 @@
   </div>
 
   <div id="dashboardPage" class="hidden">
-    <!-- Notifikasi Audio -->
+    <!-- Notifikasi Audio Ring Bell -->
     <audio id="notificationSound" preload="auto">
-      <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAAB9AAACABAAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj==" type="audio/wav">
+      <source src="data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAAB9AAACABAAZGF0YQIAAAAAAA==" type="audio/wav">
     </audio>
 
     <div class="p-8">
@@ -116,6 +116,30 @@
     let doorLogs = [];
     let currentPage = 1;
     const itemsPerPage = 5;
+    let notificationEnabled = false;
+
+    // Request Notification Permission
+    function requestNotificationPermission() {
+      if ('Notification' in window) {
+        if (Notification.permission === 'granted') {
+          notificationEnabled = true;
+          updateNotifStatus();
+        } else if (Notification.permission !== 'denied') {
+          Notification.requestPermission().then((permission) => {
+            if (permission === 'granted') {
+              notificationEnabled = true;
+              updateNotifStatus();
+            }
+          });
+        }
+      }
+    }
+
+    function updateNotifStatus() {
+      const notifStatusEl = document.getElementById('notifStatus');
+      notifStatusEl.textContent = notificationEnabled ? 'ON' : 'OFF';
+      notifStatusEl.className = notificationEnabled ? 'text-white text-2xl font-bold text-green-400' : 'text-white text-2xl';
+    }
 
     auth.onAuthStateChanged((user) => {
       document.getElementById('loadingScreen').classList.add('hidden');
@@ -136,6 +160,8 @@
       document.getElementById('loginPage').classList.add('hidden');
       document.getElementById('registerPage').classList.add('hidden');
       document.getElementById('dashboardPage').classList.remove('hidden');
+      requestNotificationPermission();
+      updateNotifStatus();
       loadDashboard();
     }
 
@@ -212,6 +238,16 @@
       if (audio) {
         audio.play().catch(e => console.log('Audio play error:', e));
       }
+
+      // Kirim browser notification jika diizinkan
+      if (notificationEnabled && 'Notification' in window) {
+        new Notification('🚨 PINTU TERBUKA!', {
+          body: 'Pintu terdeteksi OPEN. Segera periksa!',
+          icon: '🚪',
+          tag: 'door-alert',
+          requireInteraction: true
+        });
+      }
     }
 
     function renderHistory() {
@@ -245,6 +281,18 @@
       }
     }
 
+    function sendActivityNotification(status, distance) {
+      if (notificationEnabled && 'Notification' in window) {
+        const icon = status === 'OPEN' ? '🚨' : '✅';
+        const title = status === 'OPEN' ? 'PINTU TERBUKA' : 'PINTU TERTUTUP';
+        new Notification(icon + ' ' + title, {
+          body: `Status: ${status} | Jarak: ${distance} cm`,
+          tag: 'activity-' + Date.now(),
+          requireInteraction: status === 'OPEN'
+        });
+      }
+    }
+
     function changePage(page) {
       const totalPages = Math.ceil(doorLogs.length / itemsPerPage);
       if (page >= 1 && page <= totalPages) {
@@ -254,6 +302,8 @@
     }
 
     function loadDashboard() {
+      let previousLogsCount = 0;
+
       db.ref('doorLogs').on('value', (snapshot) => {
         const data = snapshot.val();
         if (data) {
@@ -262,6 +312,13 @@
             ...value
           })).sort((a, b) => b.timestamp - a.timestamp);
           document.getElementById('totalLogs').textContent = doorLogs.length;
+          
+          // Kirim notifikasi jika ada aktivitas baru
+          if (doorLogs.length > previousLogsCount && doorLogs.length > 0) {
+            const newLog = doorLogs[0];
+            sendActivityNotification(newLog.status, newLog.distance);
+          }
+          previousLogsCount = doorLogs.length;
           
           // Ambil status dari riwayat terbaru
           if (doorLogs.length > 0) {
