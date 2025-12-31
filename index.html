@@ -168,37 +168,37 @@
     // Request Notification Permission
     function requestNotificationPermission() {
       if ('Notification' in window) {
-        console.log('Notification permission status:', Notification.permission);
+        console.log('🔔 Notification API available. Current permission:', Notification.permission);
         
         if (Notification.permission === 'granted') {
           notificationEnabled = true;
-          console.log('Notifikasi sudah diizinkan');
+          console.log('✅ Notifikasi sudah diizinkan');
           updateNotifStatus();
         } else if (Notification.permission !== 'denied') {
-          console.log('Meminta izin notifikasi...');
+          console.log('📋 Requesting notification permission...');
           Notification.requestPermission().then((permission) => {
-            console.log('Permission result:', permission);
+            console.log('Permission response:', permission);
             if (permission === 'granted') {
               notificationEnabled = true;
-              console.log('Notifikasi disetujui user');
+              console.log('✅ Notifikasi disetujui user');
               updateNotifStatus();
             } else {
               notificationEnabled = false;
-              console.log('Notifikasi ditolak user');
+              console.log('❌ Notifikasi ditolak user');
               updateNotifStatus();
             }
           }).catch(err => {
-            console.error('Permission error:', err);
+            console.error('Permission request error:', err);
             notificationEnabled = false;
             updateNotifStatus();
           });
         } else {
-          console.log('Notifikasi sebelumnya ditolak');
+          console.log('❌ Notifikasi sebelumnya ditolak');
           notificationEnabled = false;
           updateNotifStatus();
         }
       } else {
-        console.log('Browser tidak support Notification API');
+        console.log('⚠️ Browser tidak support Notification API');
       }
     }
 
@@ -320,12 +320,14 @@
 
     function playRingBellSound() {
       console.log('🔔 === BELL SOUND TRIGGERED ===');
+      console.log('Current audioContext:', audioContext);
       
       let ctx = audioContext;
       if (!ctx) {
+        console.log('No global audioContext, creating new one');
         try {
           ctx = new (window.AudioContext || window.webkitAudioContext)();
-          console.log('Creating new AudioContext');
+          console.log('New AudioContext created');
         } catch (err) {
           console.error('AudioContext creation failed:', err);
           return;
@@ -333,10 +335,12 @@
       }
       
       console.log('AudioContext state:', ctx.state);
+      console.log('AudioContext currentTime:', ctx.currentTime);
       
       if (ctx.state === 'suspended') {
-        console.log('AudioContext suspended, resuming...');
+        console.log('AudioContext suspended, attempting to resume...');
         ctx.resume().then(() => {
+          console.log('AudioContext resumed successfully');
           createBellSound(ctx);
         }).catch(e => {
           console.error('Resume failed:', e);
@@ -344,6 +348,7 @@
         return;
       }
       
+      console.log('AudioContext is running, creating bell sound');
       createBellSound(ctx);
     }
     
@@ -361,14 +366,11 @@
         }
         
         const startTime = audioContext.currentTime + 0.05;
-        console.log(`Creating bell sound: 2 nada berselang (800Hz + 1000Hz) x4`);
+        console.log(`Creating bell sound at startTime: ${startTime}`);
         
         // Frekuensi bell - 2 nada berselang
         const freq1 = 800;  // Hz nada rendah
         const freq2 = 1000; // Hz nada tinggi
-        const masterGain = audioContext.createGain();
-        masterGain.connect(audioContext.destination);
-        masterGain.gain.setValueAtTime(1.0, audioContext.currentTime); // Volume penuh
         
         // Mainkan 4 kali dengan durasi 0.4 detik setiap bunyi
         for (let i = 0; i < 4; i++) {
@@ -380,9 +382,10 @@
             const gain = audioContext.createGain();
             
             osc.connect(gain);
-            gain.connect(masterGain);
+            gain.connect(audioContext.destination);
             
-            osc.frequency.setValueAtTime(freq, toneStart);
+            // Set frequency directly (more reliable)
+            osc.frequency.value = freq;
             osc.type = 'sine';
             
             // Envelope dengan attack-decay yang smooth
@@ -394,13 +397,13 @@
             osc.start(toneStart);
             osc.stop(toneStart + 0.4);
             
-            console.log(`Bell tone ${i}: ${freq}Hz (${i % 2 === 0 ? 'rendah' : 'tinggi'}) durasi 0.4s`);
+            console.log(`✓ Scheduled Bell tone ${i}: ${freq}Hz at ${toneStart}s`);
           } catch (innerErr) {
             console.error(`Error creating tone ${i}:`, innerErr);
           }
         }
         
-        console.log('✅ Ring bell sound sequence scheduled (4x bunyi)');
+        console.log('✅ Ring bell sound scheduled (4 tones)');
         
       } catch (err) {
         console.error('Error in createBellSound:', err);
@@ -474,6 +477,8 @@
         const title = icon + ' ' + (status === 'OPEN' ? 'PINTU TERBUKA' : 'PINTU TERTUTUP');
         const body = `Status: ${status} | Jarak: ${distance} cm`;
         
+        console.log('📢 sendActivityNotification called:', {status, distance, notificationEnabled});
+        
         // Tampilkan custom notification di website
         showCustomNotification(title, body);
         
@@ -484,11 +489,12 @@
         }
         
         const isAndroid = /Android|webOS/i.test(navigator.userAgent);
+        console.log('Device check:', {isAndroid, userAgent: navigator.userAgent});
         
-        // Path 1: Android - kirim via Service Worker
+        // Path 1: Android - kirim via Service Worker (NO ACTION BUTTONS)
         if ('serviceWorker' in navigator && navigator.serviceWorker.controller && isAndroid) {
           try {
-            console.log('📱 Sending notification via Service Worker to Android');
+            console.log('📱 Sending notification via Service Worker to Android (no buttons)');
             navigator.serviceWorker.controller.postMessage({
               type: 'SHOW_NOTIFICATION',
               title: title,
@@ -498,71 +504,79 @@
                 requireInteraction: status === 'OPEN',
                 vibrate: status === 'OPEN' ? [200, 100, 200, 100, 200] : [100, 50, 100],
                 silent: false,
-                actions: status === 'OPEN' ? [
-                  { action: 'open_door', title: 'Buka 🔓' },
-                  { action: 'close_door', title: 'Tutup 🔒' }
-                ] : []
+                actions: [] // HAPUS BUTTONS UNTUK MOBILE
               }
             });
-            console.log('✅ Notification sent to Android via Service Worker');
+            console.log('✅ Android notification sent');
           } catch (err) {
             console.error('Service Worker notification error:', err);
           }
         }
         
-        // Path 2: Desktop - Notification API (ALWAYS send jika permission granted)
-        if ('Notification' in window && Notification.permission === 'granted') {
-          try {
-            const notificationOptions = {
-              body: body,
-              tag: 'door-notification',
-              requireInteraction: status === 'OPEN',
-              vibrate: status === 'OPEN' ? [200, 100, 200, 100, 200] : [100, 50, 100],
-              silent: false,
-              actions: status === 'OPEN' ? [
-                { action: 'open_door', title: 'Buka 🔓' },
-                { action: 'close_door', title: 'Tutup 🔒' }
-              ] : []
-            };
-            
-            const notification = new Notification(title, notificationOptions);
-            
-            // Handle notification click
-            notification.onclick = function() {
-              console.log('Notification clicked');
-              window.focus();
-              notification.close();
-            };
-            
-            // Handle action button clicks
-            notification.onaction = function(event) {
-              console.log('Notification action:', event.action);
-              if (event.action === 'open_door') {
-                console.log('User clicked BUKA');
-              } else if (event.action === 'close_door') {
-                console.log('User clicked TUTUP');
+        // Path 2: Desktop - Notification API (WITH ACTION BUTTONS)
+        if ('Notification' in window) {
+          console.log('Notification API available. Permission:', Notification.permission);
+          
+          if (Notification.permission === 'granted') {
+            try {
+              const notificationOptions = {
+                body: body,
+                tag: 'door-notification',
+                requireInteraction: status === 'OPEN',
+                vibrate: status === 'OPEN' ? [200, 100, 200, 100, 200] : [100, 50, 100],
+                silent: false,
+                actions: status === 'OPEN' ? [
+                  { action: 'open_door', title: 'Buka 🔓' },
+                  { action: 'close_door', title: 'Tutup 🔒' }
+                ] : []
+              };
+              
+              console.log('Creating notification with options:', notificationOptions);
+              const notification = new Notification(title, notificationOptions);
+              
+              // Handle notification click
+              notification.onclick = function() {
+                console.log('Notification clicked');
+                window.focus();
+                notification.close();
+              };
+              
+              // Handle action button clicks
+              notification.onaction = function(event) {
+                console.log('Notification action:', event.action);
+                if (event.action === 'open_door') {
+                  console.log('User clicked BUKA');
+                } else if (event.action === 'close_door') {
+                  console.log('User clicked TUTUP');
+                }
+                window.focus();
+                notification.close();
+              };
+              
+              console.log('✅ Desktop notification shown');
+              
+              // Auto close setelah 5 detik jika bukan OPEN
+              if (status !== 'OPEN') {
+                setTimeout(() => {
+                  try {
+                    notification.close();
+                  } catch (e) {}
+                }, 5000);
               }
-              window.focus();
-              notification.close();
-            };
-            
-            console.log(`✅ Notification sent to ${isAndroid ? 'Android' : 'Desktop'}`);
-            
-            // Auto close setelah 5 detik jika bukan OPEN
-            if (status !== 'OPEN') {
-              setTimeout(() => {
-                try {
-                  notification.close();
-                } catch (e) {}
-              }, 5000);
+              
+            } catch (error) {
+              console.error('Desktop notification error:', error);
             }
-            
-          } catch (error) {
-            console.error('Desktop notification error:', error);
+          } else {
+            console.warn('Notification permission not granted:', Notification.permission);
           }
+        } else {
+          console.warn('Notification API not available');
         }
         
-        console.log('Activity notification sent:', title, body);
+        console.log('Activity notification processing complete');
+      } else {
+        console.log('Notification disabled, skipping');
       }
     }
 
