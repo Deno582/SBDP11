@@ -279,19 +279,23 @@
       const now = audioContext.currentTime;
       
       // Frekuensi untuk ring bell (nada tinggi dan rendah)
-      const freq1 = 1000; // Hz (nada tinggi)
-      const freq2 = 800;  // Hz (nada rendah)
+      const freq1 = 900;  // Hz (nada tinggi)
+      const freq2 = 700;  // Hz (nada rendah)
+      const freq3 = 1100; // Hz (nada super tinggi)
       
-      // Main 4 kali dengan pattern bell
-      for (let i = 0; i < 4; i++) {
-        const startTime = now + i * 0.6;
-        const freq = i % 2 === 0 ? freq1 : freq2;
-        playTone(audioContext, freq, startTime, 0.5);
+      // Ring bell pattern - 6 kali dengan harmonic
+      for (let i = 0; i < 6; i++) {
+        const startTime = now + i * 0.5;
+        
+        if (i % 2 === 0) {
+          // Nada ganda untuk suara yang lebih kaya
+          playTone(audioContext, freq1, startTime, 0.45);
+          playTone(audioContext, freq3, startTime, 0.45);
+        } else {
+          // Nada rendah
+          playTone(audioContext, freq2, startTime, 0.45);
+        }
       }
-      
-      // Tambahan: Main 2x nada ganda
-      playTone(audioContext, freq1, now + 2.5, 0.3);
-      playTone(audioContext, freq2, now + 2.55, 0.3);
     }
 
     function playTone(audioContext, frequency, startTime, duration) {
@@ -305,14 +309,14 @@
         oscillator.frequency.value = frequency;
         oscillator.type = 'sine';
         
-        // Lebih keras (volume 0.7 dari 1.0)
-        gainNode.gain.setValueAtTime(0.7, startTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.05, startTime + duration);
+        // Keras maksimal (0.9 dari 1.0 untuk avoid distortion)
+        gainNode.gain.setValueAtTime(0.9, startTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.02, startTime + duration);
         
         oscillator.start(startTime);
         oscillator.stop(startTime + duration);
         
-        console.log(`Tone: ${frequency}Hz, Duration: ${duration}s, Start: ${startTime}s`);
+        console.log(`Tone: ${frequency}Hz, Duration: ${duration}s, Start: ${startTime}s, Gain: 0.9`);
       } catch (e) {
         console.error('Tone creation error:', e);
       }
@@ -325,7 +329,7 @@
             body: body,
             icon: '🚪',
             tag: 'door-alert-' + Date.now(),
-            requireInteraction: true,
+            requireInteraction: false,
             vibrate: [200, 100, 200, 100, 200]
           });
 
@@ -333,6 +337,11 @@
             window.focus();
             notification.close();
           };
+
+          // Auto close setelah 2 detik
+          setTimeout(() => {
+            notification.close();
+          }, 2000);
 
           console.log('Notifikasi terkirim:', title);
         } catch (error) {
@@ -382,7 +391,7 @@
           const notification = new Notification(icon + ' ' + title, {
             body: body,
             tag: 'activity-' + Date.now(),
-            requireInteraction: status === 'OPEN',
+            requireInteraction: false,
             vibrate: status === 'OPEN' ? [200, 100, 200, 100, 200] : [100, 50, 100]
           });
 
@@ -390,6 +399,11 @@
             window.focus();
             notification.close();
           };
+
+          // Auto close setelah 2 detik
+          setTimeout(() => {
+            notification.close();
+          }, 2000);
 
           console.log('Activity notification:', title, body);
         } catch (error) {
