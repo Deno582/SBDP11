@@ -56,6 +56,11 @@
   </div>
 
   <div id="dashboardPage" class="hidden">
+    <!-- Notifikasi Audio -->
+    <audio id="notificationSound" preload="auto">
+      <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAAB9AAACABAAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj==" type="audio/wav">
+    </audio>
+
     <div class="p-8">
       <div class="max-w-7xl mx-auto mb-8 flex justify-between items-center">
         <div>
@@ -196,8 +201,16 @@
 
       if (state === 'OPEN') {
         statusText.className = 'text-5xl font-bold text-red-400 mb-2';
+        playNotification();
       } else {
         statusText.className = 'text-5xl font-bold text-green-400 mb-2';
+      }
+    }
+
+    function playNotification() {
+      const audio = document.getElementById('notificationSound');
+      if (audio) {
+        audio.play().catch(e => console.log('Audio play error:', e));
       }
     }
 
@@ -241,22 +254,21 @@
     }
 
     function loadDashboard() {
-      db.ref('doorStatus').on('value', (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-          updateStatusUI(data.state, data.updatedAt);
-        }
-      });
-
       db.ref('doorLogs').on('value', (snapshot) => {
         const data = snapshot.val();
         if (data) {
           doorLogs = Object.entries(data).map(([key, value]) => ({
             timestamp: value.timestamp,
-
             ...value
           })).sort((a, b) => b.timestamp - a.timestamp);
           document.getElementById('totalLogs').textContent = doorLogs.length;
+          
+          // Ambil status dari riwayat terbaru
+          if (doorLogs.length > 0) {
+            const latestLog = doorLogs[0];
+            updateStatusUI(latestLog.status, latestLog.timestamp);
+          }
+          
           renderHistory();
         }
       });
