@@ -3,6 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1e1b4b">
+  <meta name="description" content="Real-time IoT Door Monitoring with Firebase">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text x='50' y='80' font-size='90' text-anchor='middle'>🚪</text></svg>">
   <title>IoT Door Monitoring Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -151,6 +155,15 @@
     const itemsPerPage = 5;
     let notificationEnabled = false;
     let audioContext = null; // Global AudioContext untuk reuse
+    
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').then(reg => {
+        console.log('✅ Service Worker registered:', reg);
+      }).catch(err => {
+        console.log('Service Worker registration failed:', err);
+      });
+    }
 
     // Request Notification Permission
     function requestNotificationPermission() {
@@ -338,8 +351,12 @@
         // Play audio file backup juga
         const audioEl = document.getElementById('notificationSound');
         if (audioEl) {
-          audioEl.currentTime = 0;
-          audioEl.play().catch(e => console.log('Audio file play warning:', e));
+          try {
+            audioEl.currentTime = 0;
+            audioEl.play().catch(e => console.log('Audio file play warning:', e));
+          } catch (e) {
+            console.log('Audio element error:', e);
+          }
         }
         
         const startTime = audioContext.currentTime + 0.1;
@@ -366,8 +383,8 @@
             
             // Envelope dengan attack-decay yang smooth
             gain.gain.setValueAtTime(0, toneStart);
-            gain.gain.linearRampToValueAtTime(0.85, toneStart + 0.05); // Attack 50ms
-            gain.gain.setValueAtTime(0.85, toneStart + 0.3);          // Sustain
+            gain.gain.linearRampToValueAtTime(0.7, toneStart + 0.05); // Attack 50ms
+            gain.gain.setValueAtTime(0.7, toneStart + 0.3);          // Sustain
             gain.gain.exponentialRampToValueAtTime(0.01, toneStart + 0.4); // Release
             
             osc.start(toneStart);
@@ -462,8 +479,35 @@
           playRingBellSound();
         }
         
-        // Kirim notifikasi browser/desktop/Android
-        if ('Notification' in window && Notification.permission === 'granted') {
+        // Path 1: Kirim ke Service Worker untuk Android
+        const isAndroid = /Android|webOS/i.test(navigator.userAgent);
+        
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller && isAndroid) {
+          try {
+            console.log('📱 Sending notification via Service Worker to Android');
+            navigator.serviceWorker.controller.postMessage({
+              type: 'SHOW_NOTIFICATION',
+              title: title,
+              options: {
+                body: body,
+                tag: 'door-notification',
+                requireInteraction: status === 'OPEN',
+                vibrate: status === 'OPEN' ? [200, 100, 200, 100, 200] : [100, 50, 100],
+                silent: false,
+                actions: status === 'OPEN' ? [
+                  { action: 'open_door', title: 'Buka 🔓' },
+                  { action: 'close_door', title: 'Tutup 🔒' }
+                ] : []
+              }
+            });
+            console.log('✅ Notification sent to Android via Service Worker');
+          } catch (err) {
+            console.error('Service Worker notification error:', err);
+          }
+        }
+        
+        // Path 2: Desktop Notification API (untuk desktop)
+        if ('Notification' in window && Notification.permission === 'granted' && !isAndroid) {
           try {
             const notificationOptions = {
               body: body,
@@ -471,7 +515,6 @@
               requireInteraction: status === 'OPEN',
               vibrate: status === 'OPEN' ? [200, 100, 200, 100, 200] : [100, 50, 100],
               silent: false,
-              // Action buttons untuk OPEN status (desktop + Android)
               actions: status === 'OPEN' ? [
                 { action: 'open_door', title: 'Buka 🔓' },
                 { action: 'close_door', title: 'Tutup 🔒' }
@@ -499,11 +542,10 @@
               notification.close();
             };
             
-            const isAndroid = /Android|webOS/i.test(navigator.userAgent);
-            console.log(`✅ Notification sent to ${isAndroid ? 'Android' : 'Desktop'}`);
+            console.log('✅ Notification sent to Desktop');
             
-            // Auto close setelah 5 detik jika bukan OPEN (hanya desktop)
-            if (status !== 'OPEN' && !isAndroid) {
+            // Auto close setelah 5 detik jika bukan OPEN
+            if (status !== 'OPEN') {
               setTimeout(() => {
                 try {
                   notification.close();
@@ -512,7 +554,7 @@
             }
             
           } catch (error) {
-            console.error('Notification error:', error);
+            console.error('Desktop notification error:', error);
           }
         }
         
