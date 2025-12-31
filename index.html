@@ -549,10 +549,14 @@
         console.log('Platform detection:', {isAndroid, isIOS, isMobile, useServiceWorker, swController: !!navigator.serviceWorker?.controller});
 
         // ========== SHOW NOTIFICATION BASED ON PLATFORM ==========
-        if (useServiceWorker) {
-          // Mobile with service worker - use service worker notification
+        // Always show custom notification as primary method
+        console.log('📢 Showing Custom Notification...');
+        showCustomNotification(title, body);
+
+        // Additionally try native/service worker notifications if available
+        if (isMobile && useServiceWorker) {
           try {
-            console.log('📱 Using Service Worker Notification for mobile...');
+            console.log('📱 Also trying Service Worker Notification for mobile...');
             navigator.serviceWorker.controller.postMessage({
               type: 'SHOW_NOTIFICATION',
               title: title,
@@ -563,21 +567,14 @@
                 vibrate: [200, 100, 200, 100, 200]
               }
             });
-            console.log('✅ Mobile notification sent via service worker');
+            console.log('✅ Mobile service worker notification sent (additional)');
           } catch (err) {
-            console.error('Mobile notification error:', err);
-            // Fallback to custom notification
-            showCustomNotification(title, body);
+            console.error('Mobile service worker notification error:', err);
           }
-        } else if (isMobile) {
-          // Mobile without service worker - use custom notification
-          console.log('📱 Using Custom Notification for mobile (no service worker)...');
-          showCustomNotification(title, body);
-        } else {
-          // Desktop - use native notification API
+        } else if (!isMobile) {
           try {
             if ('Notification' in window && Notification.permission === 'granted') {
-              console.log('💻 Attempting Desktop Notification...');
+              console.log('💻 Also trying Desktop Notification...');
 
               const notifObj = new Notification(title, {
                 body: body,
@@ -608,16 +605,12 @@
                 }, 5000);
               }
 
-              console.log('✅ Desktop Notification sent successfully');
+              console.log('✅ Desktop Notification sent successfully (additional)');
             } else {
               console.warn('Desktop: Notification API not available or permission not granted');
-              // Fallback to custom notification for desktop
-              showCustomNotification(title, body);
             }
           } catch (err) {
             console.error('Desktop notification error:', err);
-            // Fallback to custom notification
-            showCustomNotification(title, body);
           }
         }
 
