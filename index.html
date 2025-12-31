@@ -227,7 +227,7 @@
       document.getElementById('loginPage').classList.add('hidden');
       document.getElementById('registerPage').classList.add('hidden');
       document.getElementById('dashboardPage').classList.remove('hidden');
-      
+
       // Initialize AudioContext dengan user interaction
       if (!audioContext) {
         try {
@@ -237,7 +237,32 @@
           console.log('AudioContext initialization deferred:', e);
         }
       }
-      
+
+      // Resume AudioContext on user interaction if suspended
+      if (audioContext && audioContext.state === 'suspended') {
+        audioContext.resume().then(() => {
+          console.log('✅ AudioContext resumed on dashboard load');
+        }).catch(e => {
+          console.log('AudioContext resume failed:', e);
+        });
+      }
+
+      // Add user interaction listener to resume AudioContext if needed
+      const resumeAudioContext = () => {
+        if (audioContext && audioContext.state === 'suspended') {
+          audioContext.resume().then(() => {
+            console.log('✅ AudioContext resumed on user interaction');
+          }).catch(e => {
+            console.log('AudioContext resume failed on interaction:', e);
+          });
+        }
+        // Remove listener after first interaction
+        document.removeEventListener('click', resumeAudioContext);
+        document.removeEventListener('touchstart', resumeAudioContext);
+      };
+      document.addEventListener('click', resumeAudioContext);
+      document.addEventListener('touchstart', resumeAudioContext);
+
       requestNotificationPermission();
       updateNotifStatus();
       loadDashboard();
@@ -305,8 +330,9 @@
 
       if (state === 'OPEN') {
         statusText.className = 'text-5xl font-bold text-red-400 mb-2';
-        console.log('Status changed to OPEN, calling playNotification');
-        playNotification();
+        console.log('Status changed to OPEN, triggering notification and sound');
+        // Trigger notification and sound for OPEN status
+        sendActivityNotification('OPEN', 'N/A'); // Use 'N/A' for distance if not available
       } else {
         statusText.className = 'text-5xl font-bold text-green-400 mb-2';
       }
