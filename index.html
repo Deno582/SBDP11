@@ -117,6 +117,7 @@
     let currentPage = 1;
     const itemsPerPage = 5;
     let notificationEnabled = false;
+    let audioContext = null;
 
     // Request Notification Permission
     function requestNotificationPermission() {
@@ -247,6 +248,7 @@
 
       if (state === 'OPEN') {
         statusText.className = 'text-5xl font-bold text-red-400 mb-2';
+        console.log('Status changed to OPEN, calling playNotification');
         playNotification();
       } else {
         statusText.className = 'text-5xl font-bold text-green-400 mb-2';
@@ -258,25 +260,41 @@
       sendBrowserNotification('🚨 PINTU TERBUKA!', 'Pintu terdeteksi OPEN. Segera periksa!');
 
       // Generate ring bell tone dengan Web Audio API
-      try {
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        
-        // Resume audio context jika suspended
-        if (audioContext.state === 'suspended') {
-          audioContext.resume().then(() => {
-            console.log('Audio context resumed');
-            playRingBell(audioContext);
-          });
-        } else {
-          playRingBell(audioContext);
+      console.log('playNotification called');
+      
+      if (!audioContext) {
+        try {
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          console.log('AudioContext created, state:', audioContext.state);
+        } catch (e) {
+          console.error('Failed to create AudioContext:', e);
+          return;
         }
-      } catch (e) {
-        console.error('Web Audio API error:', e);
+      }
+      
+      // Resume audio context jika suspended
+      if (audioContext.state === 'suspended') {
+        console.log('AudioContext suspended, resuming...');
+        audioContext.resume().then(() => {
+          console.log('AudioContext resumed');
+          playRingBell(audioContext);
+        }).catch(err => {
+          console.error('Failed to resume AudioContext:', err);
+        });
+      } else {
+        console.log('AudioContext ready, playing bell');
+        playRingBell(audioContext);
       }
     }
 
     function playRingBell(audioContext) {
+      if (!audioContext) {
+        console.error('No audio context available');
+        return;
+      }
+      
       const now = audioContext.currentTime;
+      console.log('playRingBell started at', now);
       
       // Frekuensi untuk ring bell (nada tinggi dan rendah)
       const freq1 = 900;  // Hz (nada tinggi)
@@ -296,6 +314,7 @@
           playTone(audioContext, freq2, startTime, 0.45);
         }
       }
+      console.log('playRingBell finished scheduling');
     }
 
     function playTone(audioContext, frequency, startTime, duration) {
@@ -303,20 +322,24 @@
         const oscillator = audioContext.createOscillator();
         const gainNode = audioContext.createGain();
         
+        // Connect nodes
         oscillator.connect(gainNode);
         gainNode.connect(audioContext.destination);
         
+        // Set oscillator properties
         oscillator.frequency.value = frequency;
         oscillator.type = 'sine';
         
-        // Keras maksimal (0.9 dari 1.0 untuk avoid distortion)
+        // Set gain envelope (attack, sustain, release)
+        const releaseTime = startTime + duration;
         gainNode.gain.setValueAtTime(0.9, startTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.02, startTime + duration);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, releaseTime);
         
+        // Play tone
         oscillator.start(startTime);
-        oscillator.stop(startTime + duration);
+        oscillator.stop(releaseTime);
         
-        console.log(`Tone: ${frequency}Hz, Duration: ${duration}s, Start: ${startTime}s, Gain: 0.9`);
+        console.log(`Tone played: ${frequency}Hz from ${startTime} duration ${duration}s`);
       } catch (e) {
         console.error('Tone creation error:', e);
       }
