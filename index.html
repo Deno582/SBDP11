@@ -17,6 +17,29 @@
       from { opacity: 1; transform: translateY(0); }
       to { opacity: 0; transform: translateY(-20px); }
     }
+    .custom-notification {
+      animation: fadeIn 0.4s ease-out;
+      background: linear-gradient(135deg, rgba(147, 51, 234, 0.95), rgba(109, 40, 217, 0.95));
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      padding: 16px;
+      min-width: 320px;
+      color: white;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(10px);
+    }
+    .custom-notification.fade-out {
+      animation: fadeOut 0.5s ease-in forwards;
+    }
+    .notification-title {
+      font-weight: 600;
+      font-size: 16px;
+      margin-bottom: 4px;
+    }
+    .notification-body {
+      font-size: 14px;
+      opacity: 0.9;
+    }
   </style>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
@@ -101,6 +124,10 @@
       </div>
     </div>
   </div>
+
+  <div id="customNotificationContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
+
+  <div id="customNotificationContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
 
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
@@ -264,9 +291,6 @@
     }
 
     function playNotification() {
-      // Kirim browser notification
-      sendBrowserNotification('🚨 PINTU TERBUKA!', 'Pintu terdeteksi OPEN. Segera periksa!');
-
       // Generate ring bell tone dengan Web Audio API
       console.log('=== PLAY NOTIFICATION STARTED ===');
       playRingBellSound();
@@ -337,34 +361,35 @@
       }
     }
 
-
-    function sendBrowserNotification(title, body) {
-      if (notificationEnabled && 'Notification' in window && Notification.permission === 'granted') {
-        try {
-          const notification = new Notification(title, {
-            body: body,
-            icon: '🚪',
-            tag: 'door-alert-' + Date.now(),
-            requireInteraction: false,
-            vibrate: [200, 100, 200, 100, 200]
-          });
-
-          notification.onclick = function() {
-            window.focus();
-            notification.close();
-          };
-
-          // Auto close setelah 5 detik dengan fade out smooth
-          setTimeout(() => {
-            notification.close();
-          }, 5000);
-
-          console.log('Browser notification sent:', title);
-        } catch (error) {
-          console.error('Notification error:', error);
-        }
-      }
+    function showCustomNotification(title, body) {
+      const container = document.getElementById('customNotificationContainer');
+      
+      // Buat notification element
+      const notifEl = document.createElement('div');
+      notifEl.className = 'custom-notification';
+      notifEl.innerHTML = `
+        <div class="notification-title">${title}</div>
+        <div class="notification-body">${body}</div>
+      `;
+      
+      // Tambahkan ke container
+      container.appendChild(notifEl);
+      
+      console.log('Custom notification shown:', title);
+      
+      // Set timeout untuk fade out
+      setTimeout(() => {
+        notifEl.classList.add('fade-out');
+        
+        // Hapus element setelah animation selesai
+        setTimeout(() => {
+          notifEl.remove();
+          console.log('Custom notification removed');
+        }, 500); // Durasi fade-out animation (0.5s)
+      }, 5000); // Tampil selama 5 detik
     }
+
+
 
     function renderHistory() {
       const container = document.getElementById('historyContainer');
@@ -398,33 +423,39 @@
     }
 
     function sendActivityNotification(status, distance) {
-      if (notificationEnabled && 'Notification' in window && Notification.permission === 'granted') {
+      if (notificationEnabled) {
         const icon = status === 'OPEN' ? '🚨' : '✅';
-        const title = status === 'OPEN' ? 'PINTU TERBUKA' : 'PINTU TERTUTUP';
+        const title = icon + ' ' + (status === 'OPEN' ? 'PINTU TERBUKA' : 'PINTU TERTUTUP');
         const body = `Status: ${status} | Jarak: ${distance} cm`;
         
-        try {
-          const notification = new Notification(icon + ' ' + title, {
-            body: body,
-            tag: 'activity-' + Date.now(),
-            requireInteraction: false,
-            vibrate: status === 'OPEN' ? [200, 100, 200, 100, 200] : [100, 50, 100]
-          });
+        // Tampilkan custom notification di website
+        showCustomNotification(title, body);
+        
+        // Kirim browser notification juga jika supported
+        if ('Notification' in window && Notification.permission === 'granted') {
+          try {
+            const notification = new Notification(icon + ' ' + (status === 'OPEN' ? 'PINTU TERBUKA' : 'PINTU TERTUTUP'), {
+              body: body,
+              tag: 'activity-' + Date.now(),
+              requireInteraction: false,
+              vibrate: status === 'OPEN' ? [200, 100, 200, 100, 200] : [100, 50, 100]
+            });
 
-          notification.onclick = function() {
-            window.focus();
-            notification.close();
-          };
+            notification.onclick = function() {
+              window.focus();
+              notification.close();
+            };
 
-          // Auto close setelah 5 detik dengan fade out smooth
-          setTimeout(() => {
-            notification.close();
-          }, 5000);
-
-          console.log('Activity notification sent:', title, body);
-        } catch (error) {
-          console.error('Notification error:', error);
+            // Auto close setelah 5 detik
+            setTimeout(() => {
+              notification.close();
+            }, 5000);
+          } catch (error) {
+            console.error('Browser notification error:', error);
+          }
         }
+        
+        console.log('Activity notification sent:', title, body);
       }
     }
 
