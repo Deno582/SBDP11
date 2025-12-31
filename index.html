@@ -121,17 +121,37 @@
     // Request Notification Permission
     function requestNotificationPermission() {
       if ('Notification' in window) {
+        console.log('Notification permission status:', Notification.permission);
+        
         if (Notification.permission === 'granted') {
           notificationEnabled = true;
+          console.log('Notifikasi sudah diizinkan');
           updateNotifStatus();
         } else if (Notification.permission !== 'denied') {
+          console.log('Meminta izin notifikasi...');
           Notification.requestPermission().then((permission) => {
+            console.log('Permission result:', permission);
             if (permission === 'granted') {
               notificationEnabled = true;
+              console.log('Notifikasi disetujui user');
+              updateNotifStatus();
+            } else {
+              notificationEnabled = false;
+              console.log('Notifikasi ditolak user');
               updateNotifStatus();
             }
+          }).catch(err => {
+            console.error('Permission error:', err);
+            notificationEnabled = false;
+            updateNotifStatus();
           });
+        } else {
+          console.log('Notifikasi sebelumnya ditolak');
+          notificationEnabled = false;
+          updateNotifStatus();
         }
+      } else {
+        console.log('Browser tidak support Notification API');
       }
     }
 
@@ -234,54 +254,68 @@
     }
 
     function playNotification() {
-      // Coba mainkan audio
-      const audio = document.getElementById('notificationSound');
-      if (audio) {
-        audio.currentTime = 0;
-        audio.play().catch(e => console.log('Audio play error:', e));
-      }
+      // Kirim browser notification
+      sendBrowserNotification('🚨 PINTU TERBUKA!', 'Pintu terdeteksi OPEN. Segera periksa!');
 
       // Generate ring bell tone dengan Web Audio API
       try {
         const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        playRingBell(audioContext);
+        
+        // Resume audio context jika suspended
+        if (audioContext.state === 'suspended') {
+          audioContext.resume().then(() => {
+            console.log('Audio context resumed');
+            playRingBell(audioContext);
+          });
+        } else {
+          playRingBell(audioContext);
+        }
       } catch (e) {
-        console.log('Web Audio API error:', e);
+        console.error('Web Audio API error:', e);
       }
-
-      // Kirim browser notification
-      sendBrowserNotification('🚨 PINTU TERBUKA!', 'Pintu terdeteksi OPEN. Segera periksa!');
     }
 
     function playRingBell(audioContext) {
       const now = audioContext.currentTime;
-      const duration = 3;
       
-      // Frekuensi untuk ring bell (2 nada)
-      const freq1 = 800; // Hz
-      const freq2 = 1000; // Hz
+      // Frekuensi untuk ring bell (nada tinggi dan rendah)
+      const freq1 = 1000; // Hz (nada tinggi)
+      const freq2 = 800;  // Hz (nada rendah)
       
+      // Main 4 kali dengan pattern bell
       for (let i = 0; i < 4; i++) {
-        const startTime = now + i * 0.5;
-        playTone(audioContext, i % 2 === 0 ? freq1 : freq2, startTime, 0.4);
+        const startTime = now + i * 0.6;
+        const freq = i % 2 === 0 ? freq1 : freq2;
+        playTone(audioContext, freq, startTime, 0.5);
       }
+      
+      // Tambahan: Main 2x nada ganda
+      playTone(audioContext, freq1, now + 2.5, 0.3);
+      playTone(audioContext, freq2, now + 2.55, 0.3);
     }
 
     function playTone(audioContext, frequency, startTime, duration) {
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      
-      oscillator.frequency.value = frequency;
-      oscillator.type = 'sine';
-      
-      gainNode.gain.setValueAtTime(0.3, startTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
-      
-      oscillator.start(startTime);
-      oscillator.stop(startTime + duration);
+      try {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.value = frequency;
+        oscillator.type = 'sine';
+        
+        // Lebih keras (volume 0.7 dari 1.0)
+        gainNode.gain.setValueAtTime(0.7, startTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.05, startTime + duration);
+        
+        oscillator.start(startTime);
+        oscillator.stop(startTime + duration);
+        
+        console.log(`Tone: ${frequency}Hz, Duration: ${duration}s, Start: ${startTime}s`);
+      } catch (e) {
+        console.error('Tone creation error:', e);
+      }
     }
 
     function sendBrowserNotification(title, body) {
