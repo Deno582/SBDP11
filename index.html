@@ -288,71 +288,75 @@
     }
 
     function playNotification() {
-      // Generate ring bell tone dengan Web Audio API
-      console.log('=== PLAY NOTIFICATION STARTED ===');
-      playRingBellSound();
+      // Bell sound hanya dimainkan dari sendActivityNotification
+      // Function ini hanya untuk status UI update
+      console.log('=== STATUS UPDATE TO OPEN ===');
     }
 
     function playRingBellSound() {
+      console.log('=== BELL SOUND TRIGGERED ===');
+      
       try {
-        // Create fresh AudioContext setiap kali (jangan reuse)
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        console.log('New AudioContext created, state:', ctx.state);
+        // Create AudioContext
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        console.log('AudioContext state:', audioContext.state);
         
-        // Resume jika suspended
-        if (ctx.state === 'suspended') {
-          ctx.resume().then(() => {
-            console.log('AudioContext resumed');
-            playBellTonesNow(ctx);
-          }).catch(err => {
-            console.error('Resume failed:', err);
+        // Handle suspended state
+        if (audioContext.state === 'suspended') {
+          console.log('Attempting to resume AudioContext');
+          audioContext.resume().then(() => {
+            console.log('AudioContext resumed - playing bell');
+            createBellSound(audioContext);
+          }).catch(e => {
+            console.error('Resume failed:', e);
           });
-        } else {
-          playBellTonesNow(ctx);
+          return;
         }
-      } catch (e) {
-        console.error('Critical error in playRingBellSound:', e);
+        
+        // If not suspended, play immediately
+        createBellSound(audioContext);
+        
+      } catch (err) {
+        console.error('AudioContext creation failed:', err);
       }
     }
-
-    function playBellTonesNow(ctx) {
+    
+    function createBellSound(audioContext) {
       try {
-        const now = ctx.currentTime;
-        console.log('playBellTonesNow starting at', now, 'context state:', ctx.state);
-        
-        // Frekuensi bell
+        const startTime = audioContext.currentTime + 0.05; // Small delay
         const freqs = [800, 1000, 850, 950, 900, 1050];
         
-        // Buat 6 tone
+        console.log(`Creating bell sound starting at ${startTime}`);
+        
+        // Create all oscillators immediately
         for (let i = 0; i < 6; i++) {
-          const startTime = now + (i * 0.4);
+          const toneStart = startTime + (i * 0.4);
           const freq = freqs[i];
           
-          try {
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            
-            osc.frequency.value = freq;
-            osc.type = 'sine';
-            
-            // Volume dan envelope
-            gain.gain.setValueAtTime(0.8, startTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.35);
-            
-            osc.start(startTime);
-            osc.stop(startTime + 0.35);
-            
-            console.log(`Tone ${i}: ${freq}Hz at ${startTime}s`);
-          } catch (innerErr) {
-            console.error(`Error creating oscillator ${i}:`, innerErr);
-          }
+          const osc = audioContext.createOscillator();
+          const gain = audioContext.createGain();
+          
+          osc.connect(gain);
+          gain.connect(audioContext.destination);
+          
+          osc.frequency.value = freq;
+          osc.type = 'sine';
+          
+          // Set gain envelope
+          gain.gain.setValueAtTime(0.8, toneStart);
+          gain.gain.exponentialRampToValueAtTime(0.01, toneStart + 0.35);
+          
+          // Schedule start and stop
+          osc.start(toneStart);
+          osc.stop(toneStart + 0.35);
+          
+          console.log(`Scheduled tone ${i}: ${freq}Hz at ${toneStart}`);
         }
-        console.log('All oscillators scheduled successfully');
-      } catch (e) {
-        console.error('Error in playBellTonesNow:', e);
+        
+        console.log('All tones scheduled successfully');
+        
+      } catch (err) {
+        console.error('Error in createBellSound:', err);
       }
     }
 
@@ -426,13 +430,13 @@
         // Tampilkan custom notification di website
         showCustomNotification(title, body);
         
-        // Play bell sound jika pintu OPEN
+        // Play bell sound HANYA jika OPEN (trigger sekali)
         if (status === 'OPEN') {
-          console.log('Door OPEN detected, playing bell sound');
+          console.log('🔔 Door OPEN - Playing bell sound NOW');
           playRingBellSound();
         }
         
-        // Kirim browser notification juga jika supported
+        // Kirim browser notification
         if ('Notification' in window && Notification.permission === 'granted') {
           try {
             const notification = new Notification(icon + ' ' + (status === 'OPEN' ? 'PINTU TERBUKA' : 'PINTU TERTUTUP'), {
