@@ -3,10 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#1e1b4b">
-  <meta name="description" content="Real-time IoT Door Monitoring Dashboard">
-  <link rel="manifest" href="manifest.json">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%239333ea' width='100' height='100'/><text x='50' y='50' font-size='60' fill='white' text-anchor='middle' dominant-baseline='central'>🚪</text></svg>">
   <title>IoT Door Monitoring Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -154,16 +150,7 @@
     let currentPage = 1;
     const itemsPerPage = 5;
     let notificationEnabled = false;
-    let audioContext = null;
-
-    // Register Service Worker untuk Android notifications
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js').then(reg => {
-        console.log('✅ Service Worker registered:', reg);
-      }).catch(err => {
-        console.log('Service Worker registration failed:', err);
-      });
-    }
+    let audioContext = null; // Global AudioContext untuk reuse
 
     // Request Notification Permission
     function requestNotificationPermission() {
@@ -227,8 +214,6 @@
       document.getElementById('loginPage').classList.add('hidden');
       document.getElementById('registerPage').classList.add('hidden');
       document.getElementById('dashboardPage').classList.remove('hidden');
-      requestNotificationPermission();
-      updateNotifStatus();
       
       // Initialize AudioContext dengan user interaction
       if (!audioContext) {
@@ -240,6 +225,8 @@
         }
       }
       
+      requestNotificationPermission();
+      updateNotifStatus();
       loadDashboard();
     }
 
@@ -321,35 +308,29 @@
     function playRingBellSound() {
       console.log('🔔 === BELL SOUND TRIGGERED ===');
       
-      try {
-        // Gunakan AudioContext yang sudah di-initialize
-        let ctx = audioContext;
-        
-        if (!ctx) {
+      let ctx = audioContext;
+      if (!ctx) {
+        try {
           ctx = new (window.AudioContext || window.webkitAudioContext)();
-          console.log('Creating new AudioContext');
-        }
-        
-        console.log('AudioContext state:', ctx.state);
-        
-        // Handle suspended state
-        if (ctx.state === 'suspended') {
-          console.log('AudioContext suspended, resuming...');
-          ctx.resume().then(() => {
-            console.log('✅ AudioContext resumed');
-            createBellSound(ctx);
-          }).catch(e => {
-            console.error('Resume failed:', e);
-          });
+        } catch (err) {
+          console.error('AudioContext creation failed:', err);
           return;
         }
-        
-        // Play immediately
-        createBellSound(ctx);
-        
-      } catch (err) {
-        console.error('AudioContext error:', err);
       }
+      
+      console.log('AudioContext state:', ctx.state);
+      
+      if (ctx.state === 'suspended') {
+        console.log('AudioContext suspended, resuming...');
+        ctx.resume().then(() => {
+          createBellSound(ctx);
+        }).catch(e => {
+          console.error('Resume failed:', e);
+        });
+        return;
+      }
+      
+      createBellSound(ctx);
     }
     
     function createBellSound(audioContext) {
@@ -475,73 +456,58 @@
         // Tampilkan custom notification di website
         showCustomNotification(title, body);
         
-        // Play bell sound HANYA jika OPEN (trigger sekali)
+        // Play bell sound HANYA jika OPEN
         if (status === 'OPEN') {
           console.log('🔔 Door OPEN - Playing ring bell sound NOW');
           playRingBellSound();
         }
         
-        // Kirim via Service Worker untuk Android
-        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-          console.log('📱 Sending notification via Service Worker');
-          navigator.serviceWorker.controller.postMessage({
-            type: 'SHOW_NOTIFICATION',
-            title: title,
-            options: {
-              body: body,
-              icon: '/icon-192.png',
-              badge: '/badge-72.png',
-              tag: 'door-' + Date.now(),
-              vibrate: status === 'OPEN' ? [200, 100, 200, 100, 200] : [100, 50, 100],
-              requireInteraction: status === 'OPEN',
-              actions: status === 'OPEN' ? [
-                { action: 'open', title: 'Buka', icon: '🔓' },
-                { action: 'close', title: 'Tutup', icon: '🔒' }
-              ] : []
-            }
-          });
-        }
-        
-        // Kirim browser/desktop/Android notification
+        // Kirim notifikasi browser/desktop/Android
         if ('Notification' in window && Notification.permission === 'granted') {
           try {
-            // Setup notification dengan opsi yang support Android
             const notificationOptions = {
               body: body,
-              icon: '/icon-192.png', // Fallback jika ada
-              badge: '/badge-72.png', // Untuk Android
-              tag: 'door-' + Date.now(),
+              tag: 'door-notification',
               requireInteraction: status === 'OPEN',
               vibrate: status === 'OPEN' ? [200, 100, 200, 100, 200] : [100, 50, 100],
               silent: false,
-              timestamp: Date.now(),
-              // Android specific
+              // Action buttons untuk OPEN status (desktop + Android)
               actions: status === 'OPEN' ? [
-                { action: 'open', title: 'Buka', icon: '🔓' },
-                { action: 'close', title: 'Tutup', icon: '🔒' }
+                { action: 'open_door', title: 'Buka 🔓' },
+                { action: 'close_door', title: 'Tutup 🔒' }
               ] : []
             };
             
             const notification = new Notification(title, notificationOptions);
             
+            // Handle notification click
             notification.onclick = function() {
+              console.log('Notification clicked');
               window.focus();
               notification.close();
             };
             
-            // Handle action buttons untuk Android
+            // Handle action button clicks
             notification.onaction = function(event) {
               console.log('Notification action:', event.action);
+              if (event.action === 'open_door') {
+                console.log('User clicked BUKA');
+              } else if (event.action === 'close_door') {
+                console.log('User clicked TUTUP');
+              }
               window.focus();
               notification.close();
             };
             
-            console.log(`✅ Notification sent to ${/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ? 'Android/Mobile' : 'Desktop'}`);
+            const isAndroid = /Android|webOS/i.test(navigator.userAgent);
+            console.log(`✅ Notification sent to ${isAndroid ? 'Android' : 'Desktop'}`);
             
-            // Auto close setelah 5 detik jika bukan OPEN
-            if (status !== 'OPEN') {
+            // Auto close setelah 5 detik jika bukan OPEN (hanya desktop)
+            if (status !== 'OPEN' && !isAndroid) {
               setTimeout(() => {
-                notification.close();
+                try {
+                  notification.close();
+                } catch (e) {}
               }, 5000);
             }
             
