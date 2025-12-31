@@ -152,7 +152,6 @@
     let currentPage = 1;
     const itemsPerPage = 5;
     let notificationEnabled = false;
-    let audioContext = null;
 
     // Request Notification Permission
     function requestNotificationPermission() {
@@ -298,66 +297,64 @@
 
     function playRingBellSound() {
       try {
-        // Inisialisasi atau gunakan AudioContext yang ada
-        if (!audioContext) {
-          audioContext = new (window.AudioContext || window.webkitAudioContext)();
-          console.log('New AudioContext created');
-        }
+        // Create fresh AudioContext setiap kali (jangan reuse)
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        console.log('New AudioContext created, state:', ctx.state);
         
-        console.log('AudioContext state:', audioContext.state);
-        
-        // Jika suspended, resume dulu
-        if (audioContext.state === 'suspended') {
-          console.log('AudioContext suspended, attempting resume');
-          audioContext.resume().then(() => {
-            console.log('AudioContext resumed successfully');
-            generateBellTones();
+        // Resume jika suspended
+        if (ctx.state === 'suspended') {
+          ctx.resume().then(() => {
+            console.log('AudioContext resumed');
+            playBellTonesNow(ctx);
           }).catch(err => {
-            console.error('Failed to resume AudioContext:', err);
+            console.error('Resume failed:', err);
           });
         } else {
-          console.log('AudioContext ready, generating tones');
-          generateBellTones();
+          playBellTonesNow(ctx);
         }
       } catch (e) {
         console.error('Critical error in playRingBellSound:', e);
       }
     }
 
-    function generateBellTones() {
+    function playBellTonesNow(ctx) {
       try {
-        const now = audioContext.currentTime;
-        console.log('generateBellTones starting at', now);
+        const now = ctx.currentTime;
+        console.log('playBellTonesNow starting at', now, 'context state:', ctx.state);
         
         // Frekuensi bell
         const freqs = [800, 1000, 850, 950, 900, 1050];
         
-        // Buat 6 tone secara langsung
+        // Buat 6 tone
         for (let i = 0; i < 6; i++) {
           const startTime = now + (i * 0.4);
           const freq = freqs[i];
           
-          const osc = audioContext.createOscillator();
-          const gain = audioContext.createGain();
-          
-          osc.connect(gain);
-          gain.connect(audioContext.destination);
-          
-          osc.frequency.value = freq;
-          osc.type = 'sine';
-          
-          // Envelope: attack-decay
-          gain.gain.setValueAtTime(0.8, startTime);
-          gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.35);
-          
-          osc.start(startTime);
-          osc.stop(startTime + 0.35);
-          
-          console.log(`Oscillator ${i}: ${freq}Hz at ${startTime}s`);
+          try {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            
+            osc.frequency.value = freq;
+            osc.type = 'sine';
+            
+            // Volume dan envelope
+            gain.gain.setValueAtTime(0.8, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.35);
+            
+            osc.start(startTime);
+            osc.stop(startTime + 0.35);
+            
+            console.log(`Tone ${i}: ${freq}Hz at ${startTime}s`);
+          } catch (innerErr) {
+            console.error(`Error creating oscillator ${i}:`, innerErr);
+          }
         }
-        console.log('All oscillators scheduled');
+        console.log('All oscillators scheduled successfully');
       } catch (e) {
-        console.error('Error in generateBellTones:', e);
+        console.error('Error in playBellTonesNow:', e);
       }
     }
 
