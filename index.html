@@ -3,6 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1e1b4b">
+  <meta name="description" content="Real-time IoT Door Monitoring Dashboard">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%239333ea' width='100' height='100'/><text x='50' y='50' font-size='60' fill='white' text-anchor='middle' dominant-baseline='central'>🚪</text></svg>">
   <title>IoT Door Monitoring Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -150,6 +154,16 @@
     let currentPage = 1;
     const itemsPerPage = 5;
     let notificationEnabled = false;
+    let audioContext = null;
+
+    // Register Service Worker untuk Android notifications
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').then(reg => {
+        console.log('✅ Service Worker registered:', reg);
+      }).catch(err => {
+        console.log('Service Worker registration failed:', err);
+      });
+    }
 
     // Request Notification Permission
     function requestNotificationPermission() {
@@ -215,6 +229,17 @@
       document.getElementById('dashboardPage').classList.remove('hidden');
       requestNotificationPermission();
       updateNotifStatus();
+      
+      // Initialize AudioContext dengan user interaction
+      if (!audioContext) {
+        try {
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          console.log('✅ AudioContext initialized on dashboard load');
+        } catch (e) {
+          console.log('AudioContext initialization deferred:', e);
+        }
+      }
+      
       loadDashboard();
     }
 
@@ -294,30 +319,36 @@
     }
 
     function playRingBellSound() {
-      console.log('=== BELL SOUND TRIGGERED ===');
+      console.log('🔔 === BELL SOUND TRIGGERED ===');
       
       try {
-        // Create AudioContext
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        console.log('AudioContext state:', audioContext.state);
+        // Gunakan AudioContext yang sudah di-initialize
+        let ctx = audioContext;
+        
+        if (!ctx) {
+          ctx = new (window.AudioContext || window.webkitAudioContext)();
+          console.log('Creating new AudioContext');
+        }
+        
+        console.log('AudioContext state:', ctx.state);
         
         // Handle suspended state
-        if (audioContext.state === 'suspended') {
-          console.log('Attempting to resume AudioContext');
-          audioContext.resume().then(() => {
-            console.log('AudioContext resumed - playing bell');
-            createBellSound(audioContext);
+        if (ctx.state === 'suspended') {
+          console.log('AudioContext suspended, resuming...');
+          ctx.resume().then(() => {
+            console.log('✅ AudioContext resumed');
+            createBellSound(ctx);
           }).catch(e => {
             console.error('Resume failed:', e);
           });
           return;
         }
         
-        // If not suspended, play immediately
-        createBellSound(audioContext);
+        // Play immediately
+        createBellSound(ctx);
         
       } catch (err) {
-        console.error('AudioContext creation failed:', err);
+        console.error('AudioContext error:', err);
       }
     }
     
@@ -448,6 +479,27 @@
         if (status === 'OPEN') {
           console.log('🔔 Door OPEN - Playing ring bell sound NOW');
           playRingBellSound();
+        }
+        
+        // Kirim via Service Worker untuk Android
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          console.log('📱 Sending notification via Service Worker');
+          navigator.serviceWorker.controller.postMessage({
+            type: 'SHOW_NOTIFICATION',
+            title: title,
+            options: {
+              body: body,
+              icon: '/icon-192.png',
+              badge: '/badge-72.png',
+              tag: 'door-' + Date.now(),
+              vibrate: status === 'OPEN' ? [200, 100, 200, 100, 200] : [100, 50, 100],
+              requireInteraction: status === 'OPEN',
+              actions: status === 'OPEN' ? [
+                { action: 'open', title: 'Buka', icon: '🔓' },
+                { action: 'close', title: 'Tutup', icon: '🔒' }
+              ] : []
+            }
+          });
         }
         
         // Kirim browser/desktop/Android notification
