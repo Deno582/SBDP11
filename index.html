@@ -9,6 +9,14 @@
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeOut {
+      from { opacity: 1; transform: translateY(0); }
+      to { opacity: 0; transform: translateY(-20px); }
+    }
   </style>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
@@ -260,90 +268,75 @@
       sendBrowserNotification('🚨 PINTU TERBUKA!', 'Pintu terdeteksi OPEN. Segera periksa!');
 
       // Generate ring bell tone dengan Web Audio API
-      console.log('playNotification called');
-      
-      if (!audioContext) {
-        try {
-          audioContext = new (window.AudioContext || window.webkitAudioContext)();
-          console.log('AudioContext created, state:', audioContext.state);
-        } catch (e) {
-          console.error('Failed to create AudioContext:', e);
-          return;
-        }
-      }
-      
-      // Resume audio context jika suspended
-      if (audioContext.state === 'suspended') {
-        console.log('AudioContext suspended, resuming...');
-        audioContext.resume().then(() => {
-          console.log('AudioContext resumed');
-          playRingBell(audioContext);
-        }).catch(err => {
-          console.error('Failed to resume AudioContext:', err);
-        });
-      } else {
-        console.log('AudioContext ready, playing bell');
-        playRingBell(audioContext);
-      }
+      console.log('=== PLAY NOTIFICATION STARTED ===');
+      playRingBellSound();
     }
 
-    function playRingBell(audioContext) {
-      if (!audioContext) {
-        console.error('No audio context available');
-        return;
-      }
-      
-      const now = audioContext.currentTime;
-      console.log('playRingBell started at', now);
-      
-      // Frekuensi untuk ring bell (nada tinggi dan rendah)
-      const freq1 = 900;  // Hz (nada tinggi)
-      const freq2 = 700;  // Hz (nada rendah)
-      const freq3 = 1100; // Hz (nada super tinggi)
-      
-      // Ring bell pattern - 6 kali dengan harmonic
-      for (let i = 0; i < 6; i++) {
-        const startTime = now + i * 0.5;
-        
-        if (i % 2 === 0) {
-          // Nada ganda untuk suara yang lebih kaya
-          playTone(audioContext, freq1, startTime, 0.45);
-          playTone(audioContext, freq3, startTime, 0.45);
-        } else {
-          // Nada rendah
-          playTone(audioContext, freq2, startTime, 0.45);
-        }
-      }
-      console.log('playRingBell finished scheduling');
-    }
-
-    function playTone(audioContext, frequency, startTime, duration) {
+    function playRingBellSound() {
       try {
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
+        // Inisialisasi atau gunakan AudioContext yang ada
+        if (!audioContext) {
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          console.log('New AudioContext created');
+        }
         
-        // Connect nodes
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
+        console.log('AudioContext state:', audioContext.state);
         
-        // Set oscillator properties
-        oscillator.frequency.value = frequency;
-        oscillator.type = 'sine';
-        
-        // Set gain envelope (attack, sustain, release)
-        const releaseTime = startTime + duration;
-        gainNode.gain.setValueAtTime(0.9, startTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, releaseTime);
-        
-        // Play tone
-        oscillator.start(startTime);
-        oscillator.stop(releaseTime);
-        
-        console.log(`Tone played: ${frequency}Hz from ${startTime} duration ${duration}s`);
+        // Jika suspended, resume dulu
+        if (audioContext.state === 'suspended') {
+          console.log('AudioContext suspended, attempting resume');
+          audioContext.resume().then(() => {
+            console.log('AudioContext resumed successfully');
+            generateBellTones();
+          }).catch(err => {
+            console.error('Failed to resume AudioContext:', err);
+          });
+        } else {
+          console.log('AudioContext ready, generating tones');
+          generateBellTones();
+        }
       } catch (e) {
-        console.error('Tone creation error:', e);
+        console.error('Critical error in playRingBellSound:', e);
       }
     }
+
+    function generateBellTones() {
+      try {
+        const now = audioContext.currentTime;
+        console.log('generateBellTones starting at', now);
+        
+        // Frekuensi bell
+        const freqs = [800, 1000, 850, 950, 900, 1050];
+        
+        // Buat 6 tone secara langsung
+        for (let i = 0; i < 6; i++) {
+          const startTime = now + (i * 0.4);
+          const freq = freqs[i];
+          
+          const osc = audioContext.createOscillator();
+          const gain = audioContext.createGain();
+          
+          osc.connect(gain);
+          gain.connect(audioContext.destination);
+          
+          osc.frequency.value = freq;
+          osc.type = 'sine';
+          
+          // Envelope: attack-decay
+          gain.gain.setValueAtTime(0.8, startTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.35);
+          
+          osc.start(startTime);
+          osc.stop(startTime + 0.35);
+          
+          console.log(`Oscillator ${i}: ${freq}Hz at ${startTime}s`);
+        }
+        console.log('All oscillators scheduled');
+      } catch (e) {
+        console.error('Error in generateBellTones:', e);
+      }
+    }
+
 
     function sendBrowserNotification(title, body) {
       if (notificationEnabled && 'Notification' in window && Notification.permission === 'granted') {
@@ -361,12 +354,12 @@
             notification.close();
           };
 
-          // Auto close setelah 2 detik
+          // Auto close setelah 5 detik dengan fade out smooth
           setTimeout(() => {
             notification.close();
-          }, 2000);
+          }, 5000);
 
-          console.log('Notifikasi terkirim:', title);
+          console.log('Browser notification sent:', title);
         } catch (error) {
           console.error('Notification error:', error);
         }
@@ -423,12 +416,12 @@
             notification.close();
           };
 
-          // Auto close setelah 2 detik
+          // Auto close setelah 5 detik dengan fade out smooth
           setTimeout(() => {
             notification.close();
-          }, 2000);
+          }, 5000);
 
-          console.log('Activity notification:', title, body);
+          console.log('Activity notification sent:', title, body);
         } catch (error) {
           console.error('Notification error:', error);
         }
