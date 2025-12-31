@@ -92,9 +92,7 @@
 
   <div id="dashboardPage" class="hidden">
     <!-- Notifikasi Audio Ring Bell dengan Web Audio API -->
-    <audio id="notificationSound" preload="auto">
-      <source src="data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAAB9AAACABAAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBg==" type="audio/wav">
-    </audio>
+    <audio id="notificationSound" src="https://www.soundjay.com/misc/sounds/bell-ringing-05.wav" preload="auto" crossorigin="anonymous">
 
     <div class="p-8">
       <div class="max-w-7xl mx-auto mb-8 flex justify-between items-center">
@@ -155,6 +153,7 @@
     const itemsPerPage = 5;
     let notificationEnabled = false;
     let audioContext = null; // Global AudioContext untuk reuse
+    let userInteracted = false; // Flag to track if user has interacted
     let pendingBellSound = false; // Flag untuk bell sound yang pending user interaction
     
     // Register Service Worker
@@ -240,20 +239,41 @@
       }
 
       // Add user interaction listener to resume AudioContext if needed
-      const resumeAudioContext = () => {
+      const handleUserInteraction = () => {
+        userInteracted = true;
+        console.log('👆 User interaction detected, setting userInteracted = true');
+
         if (audioContext && audioContext.state === 'suspended') {
           audioContext.resume().then(() => {
             console.log('✅ AudioContext resumed on user interaction');
+            // Play any pending bell sound
+            if (pendingBellSound) {
+              console.log('🔔 Playing pending bell sound after user interaction');
+              pendingBellSound = false;
+              playRingBellSound();
+            }
           }).catch(e => {
             console.log('AudioContext resume failed on interaction:', e);
           });
+        } else if (audioContext && audioContext.state === 'running') {
+          console.log('✅ AudioContext already running');
+          // Play any pending bell sound
+          if (pendingBellSound) {
+            console.log('🔔 Playing pending bell sound after user interaction');
+            pendingBellSound = false;
+            playRingBellSound();
+          }
         }
+
         // Remove listener after first interaction
-        document.removeEventListener('click', resumeAudioContext);
-        document.removeEventListener('touchstart', resumeAudioContext);
+        document.removeEventListener('click', handleUserInteraction);
+        document.removeEventListener('touchstart', handleUserInteraction);
+        document.removeEventListener('keydown', handleUserInteraction);
       };
-      document.addEventListener('click', resumeAudioContext);
-      document.addEventListener('touchstart', resumeAudioContext);
+
+      document.addEventListener('click', handleUserInteraction);
+      document.addEventListener('touchstart', handleUserInteraction);
+      document.addEventListener('keydown', handleUserInteraction);
 
       requestNotificationPermission();
       updateNotifStatus();
@@ -336,53 +356,67 @@
 
     function playRingBellSound() {
       console.log('🔔 === BELL SOUND TRIGGERED ===');
-      console.log('Current audioContext:', audioContext);
+
+      // Check if user has interacted with the page
+      if (!userInteracted) {
+        console.log('👆 User has not interacted yet, setting pending bell sound');
+        pendingBellSound = true;
+        return; // Wait for user interaction
+      }
+
+      // Directly use Web Audio API to create bell sound
+      createBellSound(audioContext);
+    }
+
+    function playWebAudioFallback() {
+      console.log('🎛️ Using Web Audio API fallback...');
 
       let ctx = audioContext;
       if (!ctx) {
-        console.log('No global audioContext, creating new one');
         try {
           ctx = new (window.AudioContext || window.webkitAudioContext)();
-          audioContext = ctx; // Update global reference
-          console.log('New AudioContext created');
+          audioContext = ctx;
+          console.log('New AudioContext created for fallback');
         } catch (err) {
-          console.error('AudioContext creation failed:', err);
+          console.error('Web Audio API not available:', err);
           return;
         }
       }
 
-      console.log('AudioContext state:', ctx.state);
-      console.log('AudioContext currentTime:', ctx.currentTime);
-
+      // Try to resume if suspended
       if (ctx.state === 'suspended') {
-        console.log('AudioContext suspended, setting pending bell sound');
-        pendingBellSound = true;
-        // Try to resume immediately
         ctx.resume().then(() => {
-          console.log('AudioContext resumed successfully');
-          if (pendingBellSound) {
-            pendingBellSound = false;
-            createBellSound(ctx);
-          }
+          console.log('✅ AudioContext resumed for fallback');
+          createBellSound(ctx);
         }).catch(e => {
-          console.error('Resume failed:', e);
-          // Set up listener for next user interaction
-          const playPendingSound = () => {
-            if (pendingBellSound && ctx.state === 'running') {
-              pendingBellSound = false;
-              createBellSound(ctx);
-              document.removeEventListener('click', playPendingSound);
-              document.removeEventListener('touchstart', playPendingSound);
-            }
-          };
-          document.addEventListener('click', playPendingSound);
-          document.addEventListener('touchstart', playPendingSound);
+          console.error('❌ AudioContext resume failed for fallback:', e);
         });
-        return;
+      } else {
+        createBellSound(ctx);
       }
+    }
 
-      console.log('AudioContext is running, creating bell sound');
-      createBellSound(ctx);
+    function playAudioElementOnly() {
+      console.log('🎵 Playing audio element only as fallback');
+      const audioEl = document.getElementById('notificationSound');
+      if (audioEl && audioEl.play) {
+        try {
+          audioEl.currentTime = 0;
+          const playPromise = audioEl.play();
+          if (playPromise !== undefined) {
+            playPromise.then(() => {
+              console.log('✅ Audio element played successfully');
+            }).catch(e => {
+              console.error('❌ Audio element play rejected:', e);
+            });
+          }
+          console.log('✓ Audio element play triggered');
+        } catch (e) {
+          console.error('❌ Audio element error:', e);
+        }
+      } else {
+        console.error('❌ Audio element not found or not playable');
+      }
     }
     
     function createBellSound(audioContext) {
