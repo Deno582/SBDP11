@@ -56,9 +56,9 @@
   </div>
 
   <div id="dashboardPage" class="hidden">
-    <!-- Notifikasi Audio Ring Bell -->
+    <!-- Notifikasi Audio Ring Bell dengan Web Audio API -->
     <audio id="notificationSound" preload="auto">
-      <source src="data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAAB9AAACABAAZGF0YQIAAAAAAA==" type="audio/wav">
+      <source src="data:audio/wav;base64,UklGRiYAAABXQVZFZm10IBAAAAABAAEAQB8AAAB9AAACABAAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBg==" type="audio/wav">
     </audio>
 
     <div class="p-8">
@@ -234,19 +234,76 @@
     }
 
     function playNotification() {
+      // Coba mainkan audio
       const audio = document.getElementById('notificationSound');
       if (audio) {
+        audio.currentTime = 0;
         audio.play().catch(e => console.log('Audio play error:', e));
       }
 
-      // Kirim browser notification jika diizinkan
-      if (notificationEnabled && 'Notification' in window) {
-        new Notification('🚨 PINTU TERBUKA!', {
-          body: 'Pintu terdeteksi OPEN. Segera periksa!',
-          icon: '🚪',
-          tag: 'door-alert',
-          requireInteraction: true
-        });
+      // Generate ring bell tone dengan Web Audio API
+      try {
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        playRingBell(audioContext);
+      } catch (e) {
+        console.log('Web Audio API error:', e);
+      }
+
+      // Kirim browser notification
+      sendBrowserNotification('🚨 PINTU TERBUKA!', 'Pintu terdeteksi OPEN. Segera periksa!');
+    }
+
+    function playRingBell(audioContext) {
+      const now = audioContext.currentTime;
+      const duration = 3;
+      
+      // Frekuensi untuk ring bell (2 nada)
+      const freq1 = 800; // Hz
+      const freq2 = 1000; // Hz
+      
+      for (let i = 0; i < 4; i++) {
+        const startTime = now + i * 0.5;
+        playTone(audioContext, i % 2 === 0 ? freq1 : freq2, startTime, 0.4);
+      }
+    }
+
+    function playTone(audioContext, frequency, startTime, duration) {
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.frequency.value = frequency;
+      oscillator.type = 'sine';
+      
+      gainNode.gain.setValueAtTime(0.3, startTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+      
+      oscillator.start(startTime);
+      oscillator.stop(startTime + duration);
+    }
+
+    function sendBrowserNotification(title, body) {
+      if (notificationEnabled && 'Notification' in window && Notification.permission === 'granted') {
+        try {
+          const notification = new Notification(title, {
+            body: body,
+            icon: '🚪',
+            tag: 'door-alert-' + Date.now(),
+            requireInteraction: true,
+            vibrate: [200, 100, 200, 100, 200]
+          });
+
+          notification.onclick = function() {
+            window.focus();
+            notification.close();
+          };
+
+          console.log('Notifikasi terkirim:', title);
+        } catch (error) {
+          console.error('Notification error:', error);
+        }
       }
     }
 
@@ -282,14 +339,28 @@
     }
 
     function sendActivityNotification(status, distance) {
-      if (notificationEnabled && 'Notification' in window) {
+      if (notificationEnabled && 'Notification' in window && Notification.permission === 'granted') {
         const icon = status === 'OPEN' ? '🚨' : '✅';
         const title = status === 'OPEN' ? 'PINTU TERBUKA' : 'PINTU TERTUTUP';
-        new Notification(icon + ' ' + title, {
-          body: `Status: ${status} | Jarak: ${distance} cm`,
-          tag: 'activity-' + Date.now(),
-          requireInteraction: status === 'OPEN'
-        });
+        const body = `Status: ${status} | Jarak: ${distance} cm`;
+        
+        try {
+          const notification = new Notification(icon + ' ' + title, {
+            body: body,
+            tag: 'activity-' + Date.now(),
+            requireInteraction: status === 'OPEN',
+            vibrate: status === 'OPEN' ? [200, 100, 200, 100, 200] : [100, 50, 100]
+          });
+
+          notification.onclick = function() {
+            window.focus();
+            notification.close();
+          };
+
+          console.log('Activity notification:', title, body);
+        } catch (error) {
+          console.error('Notification error:', error);
+        }
       }
     }
 
