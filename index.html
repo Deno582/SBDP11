@@ -613,21 +613,11 @@
               const notifObj = new Notification(title, {
                 body: body,
                 tag: status === 'OPEN' ? 'door-open-notification' : 'door-closed-notification',
-                requireInteraction: status === 'OPEN',
-                actions: status === 'OPEN' ? [
-                  { action: 'open_door', title: 'Buka 🔓' },
-                  { action: 'close_door', title: 'Tutup 🔒' }
-                ] : []
+                requireInteraction: status === 'OPEN'
               });
 
               notifObj.onclick = () => {
                 console.log('Desktop notification clicked');
-                window.focus();
-                notifObj.close();
-              };
-
-              notifObj.onaction = (e) => {
-                console.log('Desktop action clicked:', e.action);
                 window.focus();
                 notifObj.close();
               };
