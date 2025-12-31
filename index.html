@@ -127,8 +127,6 @@
 
   <div id="customNotificationContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
 
-  <div id="customNotificationContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2"></div>
-
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -427,6 +425,12 @@
         
         // Tampilkan custom notification di website
         showCustomNotification(title, body);
+        
+        // Play bell sound jika pintu OPEN
+        if (status === 'OPEN') {
+          console.log('Door OPEN detected, playing bell sound');
+          playRingBellSound();
+        }
         
         // Kirim browser notification juga jika supported
         if ('Notification' in window && Notification.permission === 'granted') {
