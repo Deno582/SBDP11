@@ -99,7 +99,7 @@
           <p class="text-purple-200">User: <span id="userEmail"></span></p>
         </div>
         <div class="flex gap-4">
-          <button id="enableAudioBtn" onclick="enableAudio()" class="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700">Enable Audio</button>
+          <button id="toggleAudioBtn" onclick="toggleAudio()" class="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700">Disable Audio</button>
           <button onclick="logout()" class="bg-red-600 text-white px-6 py-3 rounded-xl">Logout</button>
         </div>
       </div>
@@ -153,6 +153,7 @@
     let currentPage = 1;
     const itemsPerPage = 5;
     let notificationEnabled = false;
+    let audioEnabled = true; // Flag to enable/disable bell sound
     let audioContext = null; // Global AudioContext untuk reuse
     let userInteracted = false; // Flag to track if user has interacted
     let pendingBellSound = false; // Flag untuk bell sound yang pending user interaction
@@ -357,6 +358,12 @@
 
     function playRingBellSound() {
       console.log('🔔 === BELL SOUND TRIGGERED ===');
+
+      // Check if audio is enabled
+      if (!audioEnabled) {
+        console.log('🔇 Audio disabled, skipping bell sound');
+        return;
+      }
 
       if (!audioContext) {
         console.log('No audioContext available, setting pending bell sound');
@@ -591,10 +598,11 @@
         // ========== PLATFORM DETECTION ==========
         const isAndroid = /Android|webOS/i.test(navigator.userAgent);
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const isWindows = /Windows/i.test(navigator.userAgent);
         const isMobile = isAndroid || isIOS;
         const useServiceWorker = 'serviceWorker' in navigator && navigator.serviceWorker.controller;
 
-        console.log('Platform detection:', {isAndroid, isIOS, isMobile, useServiceWorker, swController: !!navigator.serviceWorker?.controller});
+        console.log('Platform detection:', {isAndroid, isIOS, isWindows, isMobile, useServiceWorker, swController: !!navigator.serviceWorker?.controller});
 
         // ========== SHOW NOTIFICATION BASED ON PLATFORM ==========
         // Always show custom notification as primary method
@@ -605,12 +613,24 @@
         if (useServiceWorker) {
           try {
             console.log('🔄 Also trying Service Worker Notification...');
+
+            // For Windows, use unique tags to prevent notifications from disappearing
+            let notificationTag;
+            if (isWindows) {
+              // Use timestamp to make tag unique for Windows
+              notificationTag = `door-${status.toLowerCase()}-notification-${Date.now()}`;
+              console.log('🪟 Windows detected, using unique tag:', notificationTag);
+            } else {
+              // For other platforms, use standard tags
+              notificationTag = status === 'OPEN' ? 'door-open-notification' : 'door-closed-notification';
+            }
+
             navigator.serviceWorker.controller.postMessage({
               type: 'SHOW_NOTIFICATION',
               title: title,
               options: {
                 body: body,
-                tag: status === 'OPEN' ? 'door-open-notification' : 'door-closed-notification',
+                tag: notificationTag,
                 requireInteraction: status === 'OPEN',
                 vibrate: isMobile ? [200, 100, 200, 100, 200] : undefined
               }
@@ -634,27 +654,41 @@
       }
     }
 
-    function enableAudio() {
-      console.log('🎵 Enable Audio button clicked');
-      if (audioContext && audioContext.state === 'suspended') {
-        audioContext.resume().then(() => {
-          console.log('✅ AudioContext resumed via Enable Audio button');
+    function toggleAudio() {
+      console.log('🎵 Toggle Audio button clicked');
+      const btn = document.getElementById('toggleAudioBtn');
+
+      if (audioEnabled) {
+        // Disable audio
+        audioEnabled = false;
+        console.log('🔇 Audio disabled');
+        btn.textContent = 'Enable Audio';
+        btn.className = 'bg-green-600 text-white px-6 py-3 rounded-xl hover:bg-green-700';
+      } else {
+        // Enable audio
+        audioEnabled = true;
+        console.log('🔊 Audio enabled');
+        btn.textContent = 'Disable Audio';
+        btn.className = 'bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700';
+
+        // Try to resume AudioContext if suspended
+        if (audioContext && audioContext.state === 'suspended') {
+          audioContext.resume().then(() => {
+            console.log('✅ AudioContext resumed via toggle');
+            userInteracted = true;
+            // Play any pending bell sound
+            if (pendingBellSound) {
+              console.log('🔔 Playing pending bell sound after enabling audio');
+              pendingBellSound = false;
+              playRingBellSound();
+            }
+          }).catch(e => {
+            console.log('❌ AudioContext resume failed:', e);
+          });
+        } else if (audioContext && audioContext.state === 'running') {
+          console.log('✅ AudioContext already running');
           userInteracted = true;
-          // Play any pending bell sound
-          if (pendingBellSound) {
-            console.log('🔔 Playing pending bell sound after enabling audio');
-            pendingBellSound = false;
-            playRingBellSound();
-          }
-          // Hide the button after successful enable
-          document.getElementById('enableAudioBtn').style.display = 'none';
-        }).catch(e => {
-          console.log('❌ AudioContext resume failed:', e);
-        });
-      } else if (audioContext && audioContext.state === 'running') {
-        console.log('✅ AudioContext already running');
-        userInteracted = true;
-        document.getElementById('enableAudioBtn').style.display = 'none';
+        }
       }
     }
 
