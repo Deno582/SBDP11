@@ -621,8 +621,9 @@
               notificationTag = `door-${status.toLowerCase()}-notification-${Date.now()}`;
               console.log('🪟 Windows detected, using unique tag:', notificationTag);
             } else {
-              // For other platforms, use standard tags
-              notificationTag = status === 'OPEN' ? 'door-open-notification' : 'door-closed-notification';
+              // For mobile platforms, use same tag to replace previous notification
+              notificationTag = 'door-status-notification';
+              console.log('📱 Mobile detected, using shared tag:', notificationTag);
             }
 
             navigator.serviceWorker.controller.postMessage({
