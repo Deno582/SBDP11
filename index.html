@@ -355,15 +355,23 @@
     function playRingBellSound() {
       console.log('🔔 === BELL SOUND TRIGGERED ===');
 
-      // Check if user has interacted with the page
-      if (!userInteracted) {
-        console.log('👆 User has not interacted yet, setting pending bell sound');
+      if (!audioContext) {
+        console.log('No audioContext available, setting pending bell sound');
         pendingBellSound = true;
-        return; // Wait for user interaction
+        return;
       }
 
-      // Directly use Web Audio API to create bell sound
-      createBellSound(audioContext);
+      if (audioContext.state === 'suspended') {
+        audioContext.resume().then(() => {
+          console.log('✅ AudioContext resumed immediately for bell sound');
+          createBellSound(audioContext);
+        }).catch(() => {
+          console.log('❌ AudioContext resume failed, setting pending bell sound');
+          pendingBellSound = true;
+        });
+      } else {
+        createBellSound(audioContext);
+      }
     }
 
     function playWebAudioFallback() {
@@ -611,21 +619,12 @@
               const notifObj = new Notification(title, {
                 body: body,
                 tag: status === 'OPEN' ? 'door-open-notification' : 'door-closed-notification',
-                requireInteraction: status === 'OPEN',
-                actions: status === 'OPEN' ? [
-                  { action: 'open_door', title: 'Buka 🔓' },
-                  { action: 'close_door', title: 'Tutup 🔒' }
-                ] : []
+                requireInteraction: status === 'OPEN'
+                // Removed actions as they are not supported for direct Notification constructor
               });
 
               notifObj.onclick = () => {
                 console.log('Desktop notification clicked');
-                window.focus();
-                notifObj.close();
-              };
-
-              notifObj.onaction = (e) => {
-                console.log('Desktop action clicked:', e.action);
                 window.focus();
                 notifObj.close();
               };
