@@ -98,7 +98,10 @@
           <h1 class="text-5xl font-bold text-white">IoT Door Monitor</h1>
           <p class="text-purple-200">User: <span id="userEmail"></span></p>
         </div>
-        <button onclick="logout()" class="bg-red-600 text-white px-6 py-3 rounded-xl">Logout</button>
+        <div class="flex gap-4">
+          <button id="enableAudioBtn" onclick="enableAudio()" class="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700">Enable Audio</button>
+          <button onclick="logout()" class="bg-red-600 text-white px-6 py-3 rounded-xl">Logout</button>
+        </div>
       </div>
 
       <div class="max-w-7xl mx-auto grid md:grid-cols-2 gap-6">
@@ -362,13 +365,18 @@
       }
 
       if (audioContext.state === 'suspended') {
-        audioContext.resume().then(() => {
-          console.log('✅ AudioContext resumed immediately for bell sound');
-          createBellSound(audioContext);
-        }).catch(() => {
-          console.log('❌ AudioContext resume failed, setting pending bell sound');
+        if (userInteracted) {
+          audioContext.resume().then(() => {
+            console.log('✅ AudioContext resumed immediately for bell sound');
+            createBellSound(audioContext);
+          }).catch(() => {
+            console.log('❌ AudioContext resume failed, setting pending bell sound');
+            pendingBellSound = true;
+          });
+        } else {
+          console.log('AudioContext suspended and no user interaction yet, setting pending bell sound');
           pendingBellSound = true;
-        });
+        }
       } else {
         createBellSound(audioContext);
       }
@@ -623,6 +631,30 @@
 
       } else {
         console.log('⚠️ Notifications disabled');
+      }
+    }
+
+    function enableAudio() {
+      console.log('🎵 Enable Audio button clicked');
+      if (audioContext && audioContext.state === 'suspended') {
+        audioContext.resume().then(() => {
+          console.log('✅ AudioContext resumed via Enable Audio button');
+          userInteracted = true;
+          // Play any pending bell sound
+          if (pendingBellSound) {
+            console.log('🔔 Playing pending bell sound after enabling audio');
+            pendingBellSound = false;
+            playRingBellSound();
+          }
+          // Hide the button after successful enable
+          document.getElementById('enableAudioBtn').style.display = 'none';
+        }).catch(e => {
+          console.log('❌ AudioContext resume failed:', e);
+        });
+      } else if (audioContext && audioContext.state === 'running') {
+        console.log('✅ AudioContext already running');
+        userInteracted = true;
+        document.getElementById('enableAudioBtn').style.display = 'none';
       }
     }
 
