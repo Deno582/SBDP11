@@ -631,7 +631,7 @@
               options: {
                 body: body,
                 tag: notificationTag,
-                requireInteraction: status === 'OPEN',
+                requireInteraction: status === 'OPEN' && !isWindows, // Allow Windows open notifications to auto-dismiss
                 vibrate: isMobile ? [200, 100, 200, 100, 200] : undefined
               }
             });
