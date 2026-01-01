@@ -584,7 +584,7 @@
         const isAndroid = /Android|webOS/i.test(navigator.userAgent);
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
         const isMobile = isAndroid || isIOS;
-        const useServiceWorker = isMobile && 'serviceWorker' in navigator && navigator.serviceWorker.controller;
+        const useServiceWorker = 'serviceWorker' in navigator && navigator.serviceWorker.controller;
 
         console.log('Platform detection:', {isAndroid, isIOS, isMobile, useServiceWorker, swController: !!navigator.serviceWorker?.controller});
 
@@ -593,10 +593,10 @@
         console.log('📢 Showing Custom Notification...');
         showCustomNotification(title, body);
 
-        // Additionally try native/service worker notifications if available
-        if (isMobile && useServiceWorker) {
+        // Additionally try service worker notifications if available (for all platforms)
+        if (useServiceWorker) {
           try {
-            console.log('📱 Also trying Service Worker Notification for mobile...');
+            console.log('🔄 Also trying Service Worker Notification...');
             navigator.serviceWorker.controller.postMessage({
               type: 'SHOW_NOTIFICATION',
               title: title,
@@ -604,45 +604,15 @@
                 body: body,
                 tag: status === 'OPEN' ? 'door-open-notification' : 'door-closed-notification',
                 requireInteraction: status === 'OPEN',
-                vibrate: [200, 100, 200, 100, 200]
+                vibrate: isMobile ? [200, 100, 200, 100, 200] : undefined
               }
             });
-            console.log('✅ Mobile service worker notification sent (additional)');
+            console.log('✅ Service worker notification sent (additional)');
           } catch (err) {
-            console.error('Mobile service worker notification error:', err);
+            console.error('Service worker notification error:', err);
           }
-        } else if (!isMobile) {
-          try {
-            if ('Notification' in window && Notification.permission === 'granted') {
-              console.log('💻 Also trying Desktop Notification...');
-
-              const notifObj = new Notification(title, {
-                body: body,
-                tag: status === 'OPEN' ? 'door-open-notification' : 'door-closed-notification',
-                requireInteraction: status === 'OPEN'
-                // Removed actions as they are not supported for direct Notification constructor
-              });
-
-              notifObj.onclick = () => {
-                console.log('Desktop notification clicked');
-                window.focus();
-                notifObj.close();
-              };
-
-              // Auto-close untuk CLOSED after 5s
-              if (status !== 'OPEN') {
-                setTimeout(() => {
-                  notifObj.close();
-                }, 5000);
-              }
-
-              console.log('✅ Desktop Notification sent successfully (additional)');
-            } else {
-              console.warn('Desktop: Notification API not available or permission not granted');
-            }
-          } catch (err) {
-            console.error('Desktop notification error:', err);
-          }
+        } else {
+          console.log('⚠️ Service worker not available for additional notifications');
         }
 
         // ========== PLAY BELL SOUND FOR OPEN STATUS ==========
